@@ -33,7 +33,7 @@
     </a>
     <div class="project-state">
       <span class="state-dot" aria-hidden="true"></span>
-      <span><b id="headerProfileName">L profils</b><small id="headerSaveState">Izmaiņas saglabājas ierīcē</small></span>
+      <span><b id="headerProfileName">L veida profils</b><small id="headerSaveState">Izmaiņas saglabājas ierīcē</small></span>
     </div>
     <div class="header-actions">
       <button class="button button-ghost" id="shareButton" type="button">Kopīgot</button>
@@ -42,7 +42,7 @@
   </header>
 
   <nav class="mobile-tabs" aria-label="Konfiguratora darba zonas">
-    <button type="button" data-panel="presets"><span>01</span> Profils</button>
+    <button type="button" data-panel="presets"><span>01</span> Profila tips</button>
     <button class="active" type="button" data-panel="viewer"><span>02</span> 3D modelis</button>
     <button type="button" data-panel="drawing"><span>03</span> Rasējums</button>
   </nav>
@@ -51,8 +51,8 @@
     <aside class="workspace preset-panel" aria-label="Profila parametri">
       <div class="panel-title">
         <div>
-          <span class="eyebrow">01 / Sākuma forma</span>
-          <h1>Izvēlies profilu</h1>
+          <span class="eyebrow">01 / Profila tips</span>
+          <h1>Izvēlies profila tipu</h1>
         </div>
         <span class="mini-status">LIVE</span>
       </div>
@@ -60,15 +60,15 @@
       <div class="profile-grid" id="profileGrid">
         <button class="profile-card active" type="button" data-profile="l">
           <span class="profile-glyph glyph-l" aria-hidden="true"></span>
-          <span><b>L profils</b><small>Leņķis</small></span>
+          <span><b>L veida profils</b><small>Leņķprofils</small></span>
         </button>
         <button class="profile-card" type="button" data-profile="u">
           <span class="profile-glyph glyph-u" aria-hidden="true"></span>
-          <span><b>U profils</b><small>Kanāls</small></span>
+          <span><b>U veida profils</b><small>Kanālprofils</small></span>
         </button>
         <button class="profile-card" type="button" data-profile="o">
           <span class="profile-glyph glyph-o" aria-hidden="true"></span>
-          <span><b>O profils</b><small>Apaļa caurule</small></span>
+          <span><b>Apaļā caurule</b><small>Dobs šķērsgriezums</small></span>
         </button>
         <button class="profile-card" type="button" data-profile="solid">
           <span class="profile-glyph glyph-solid" aria-hidden="true"></span>
@@ -145,7 +145,7 @@
       <div class="viewer-head">
         <div>
           <span class="eyebrow light">02 / 3D priekšskatījums</span>
-          <h2 id="viewerTitle">L profils · 40 × 40 × 3 mm</h2>
+          <h2 id="viewerTitle">L veida profils · 40 × 40 × 3 mm</h2>
         </div>
         <div class="view-switcher" aria-label="Kameras skats">
           <button type="button" data-camera="model">Ražošanas skats</button>
@@ -162,7 +162,7 @@
 
       <div class="render-state" id="renderState" aria-live="polite">
         <span class="render-dot"></span>
-        <span><b>Modelis gatavs</b><small>Velc, lai pagrieztu · ritini, lai pietuvinātu</small></span>
+        <span><b>Modelis gatavs</b><small>Stabils šķērsgriezums · ritini, lai pietuvinātu</small></span>
       </div>
 
       <div class="viewer-toolbar">
@@ -227,7 +227,7 @@
           <div class="hole-preview" id="holePreview"></div>
           <div class="custom-hole-preview" id="customHolePreview"></div>
           <span class="z-label">Z</span>
-          <span class="z-hint">Klikšķini uz profila — dzeltenais punkts = custom urbums</span>
+          <span class="z-hint">Klikšķini uz profila — dzeltenais punkts = atsevišķs urbums</span>
         </div>
         <label class="toggle-row" for="holesToggle">
           <span><b>Periodiski urbumi</b><small>Atzīmēt urbumu soli gar Z asi</small></span>
@@ -302,8 +302,8 @@
     <form method="dialog">
       <div class="dialog-head"><div><span class="eyebrow">Kā tas strādā</span><h2>No rūtiņas līdz profilam</h2></div><button class="dialog-close" value="cancel" aria-label="Aizvērt">×</button></div>
       <ol class="help-steps">
-        <li><span>1</span><p><b>Izvēlies prototipu vai “Savs rasējums”.</b> Standarta formas izmērus maini ar slīdņiem.</p></li>
-        <li><span>2</span><p><b>Custom režīmā iezīmē materiāla laukumu X/Y plaknē.</b> Katrs mazais režģa solis ir tieši 1 mm.</p></li>
+        <li><span>1</span><p><b>Izvēlies profila tipu vai “Savs rasējums”.</b> Standarta formas izmērus maini ar slīdņiem.</p></li>
+        <li><span>2</span><p><b>Sava rasējuma režīmā iezīmē materiāla laukumu X/Y plaknē.</b> Katrs mazais režģa solis ir tieši 1 mm.</p></li>
         <li><span>3</span><p><b>Apstrādes skatā norādi urbumus gar Z asi.</b> Centrālais modelis saglabā to pašu mērogu.</p></li>
         <li><span>4</span><p><b>Ekstrudē un nosūti pieprasījumu.</b> Gala rasējumu pirms ražošanas apstiprina tehnologs.</p></li>
       </ol>

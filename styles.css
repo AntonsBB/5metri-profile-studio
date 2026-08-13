@@ -274,6 +274,9 @@ input[type="range"]:focus-visible { outline: 2px solid rgba(209, 38, 48, .35); o
 
 .webgl-mount { position: absolute; inset: 0 0 98px; touch-action: none; }
 .webgl-mount canvas { width: 100%; height: 100%; display: block; }
+.viewer-panel[data-view="front"] .factory-backdrop { opacity: .34; }
+.viewer-panel[data-view="front"] .machine-label { opacity: 0; }
+.viewer-panel[data-view="front"] .axis-cube { opacity: .45; }
 .machine-label { position: absolute; z-index: 3; left: 23px; top: 106px; display: flex; flex-direction: column; color: rgba(255,255,255,.22); font-size: 8px; font-weight: 700; letter-spacing: .18em; }
 .machine-label b { margin-top: -6px; color: rgba(255,255,255,.07); font-size: 64px; line-height: 1; letter-spacing: -.06em; }
 .axis-cube { position: absolute; z-index: 5; right: 24px; bottom: 126px; width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.17); border-radius: 4px; background: rgba(12,15,17,.4); }

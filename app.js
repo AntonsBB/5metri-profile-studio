@@ -7,12 +7,12 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const STORAGE_KEY = '5metri-profile-studio-v1';
 const GRID_SIZE = 250;
 const PROFILE_NAMES = {
-  l: 'L profils',
-  u: 'U profils',
-  o: 'O profils',
+  l: 'L veida profils',
+  u: 'U veida profils',
+  o: 'Apaļā caurule',
   solid: 'Kastes profils',
   tube: 'Taisnstūra caurule',
-  custom: 'Custom profils'
+  custom: 'Savs rasējums'
 };
 
 const defaultState = {
@@ -40,9 +40,11 @@ let camera;
 let renderer;
 let controls;
 let profileAssembly;
+let crossSectionAssembly;
 let dieAssembly;
 let floorGrid;
 let extrusionAnimation = null;
+let cameraTweenFrame = null;
 let currentCamera = 'front';
 let saveTimer;
 let toastTimer;
@@ -136,7 +138,10 @@ function initScene() {
   controls.autoRotate = false;
   controls.autoRotateSpeed = 0.24;
   controls.target.set(0, 0, 0);
-  controls.addEventListener('start', () => { controls.autoRotate = false; });
+  controls.addEventListener('start', () => {
+    controls.autoRotate = false;
+    cancelCameraTween();
+  });
 
   scene.add(new THREE.HemisphereLight(0xddeeff, 0x25282b, 1.75));
   const key = new THREE.DirectionalLight(0xffffff, 4.5);
@@ -172,7 +177,7 @@ function bindInterface() {
       state.profile = button.dataset.profile;
       if (state.profile === 'o') state.height = state.width;
       syncInterface();
-      buildModel({ animate: true, refit: true });
+      buildModel({ animate: false, refit: true });
       saveState();
       if (state.profile === 'custom' && window.innerWidth <= 960) setMobilePanel('drawing');
     });
@@ -191,7 +196,7 @@ function bindInterface() {
     button.addEventListener('click', () => {
       state.length = Number(button.dataset.length);
       syncInterface();
-      buildModel({ animate: true, refit: true });
+      buildModel({ animate: false, refit: true });
       saveState();
     });
   });
@@ -210,7 +215,7 @@ function bindInterface() {
   });
 
   $('#renderButton').addEventListener('click', () => {
-    selectCamera('model', true);
+    selectCamera('model', false);
     buildModel({ animate: true, refit: false });
   });
 
@@ -239,7 +244,7 @@ function bindInterface() {
     state.profile = 'custom';
     renderSketch();
     syncInterface();
-    buildModel({ animate: true, refit: true });
+    buildModel({ animate: false, refit: true });
     saveState();
     if (window.innerWidth <= 960) setMobilePanel('viewer');
   });
@@ -301,7 +306,11 @@ function bindRange(selector, update) {
     scheduleModelRebuild();
     saveState();
   });
-  input.addEventListener('change', () => buildModel({ animate: true, refit: true }));
+  input.addEventListener('change', () => {
+    cancelAnimationFrame(rebuildFrame);
+    rebuildFrame = null;
+    buildModel({ animate: false, refit: true });
+  });
 }
 
 function bindNumber(selector, update) {
@@ -381,7 +390,9 @@ function setDrawingTab(tab) {
 function selectCamera(mode, smooth = false) {
   currentCamera = mode;
   $$('.view-switcher button').forEach(button => button.classList.toggle('active', button.dataset.camera === mode));
+  $('.viewer-panel').dataset.view = mode;
   fitCamera(mode, smooth);
+  setRenderStatus(Boolean(extrusionAnimation));
 }
 
 function syncMachining() {
@@ -476,7 +487,7 @@ function addCustomHole(value) {
   syncMachining();
   buildModel({ animate: false, refit: false });
   saveState();
-  showToast(`Pievienots custom urbums: Z ${formatNumber(z)} mm.`);
+  showToast(`Pievienots atsevišķs urbums: Z ${formatNumber(z)} mm.`);
 }
 
 function activateCustomDrawing() {
@@ -549,22 +560,20 @@ function polygonArea(points) {
 
 function buildModel({ animate = false, refit = false } = {}) {
   if (profileAssembly) disposeObject(profileAssembly);
+  if (crossSectionAssembly) disposeObject(crossSectionAssembly);
   if (dieAssembly) disposeObject(dieAssembly);
   if (floorGrid) disposeObject(floorGrid);
+  extrusionAnimation = null;
 
   const dimensions = activeDimensions();
   const shape = makeProfileShape();
   if (!shape) return;
 
-  const bevel = Math.min(0.45, Math.max(0.12, Math.min(dimensions.width || 10, dimensions.height || 10) * 0.006));
   const geometry = new THREE.ExtrudeGeometry(shape, {
     depth: state.length,
     steps: 1,
     curveSegments: 48,
-    bevelEnabled: true,
-    bevelSegments: 2,
-    bevelSize: bevel,
-    bevelThickness: bevel
+    bevelEnabled: false
   });
   geometry.computeBoundingBox();
   const box = geometry.boundingBox;
@@ -588,6 +597,9 @@ function buildModel({ animate = false, refit = false } = {}) {
   const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
   profileAssembly.add(edges);
 
+  crossSectionAssembly = createCrossSection(shape);
+  scene.add(crossSectionAssembly);
+
   addMachiningMarkers(profileAssembly, dimensions);
   dieAssembly = createDie(dimensions);
   scene.add(dieAssembly);
@@ -595,9 +607,11 @@ function buildModel({ animate = false, refit = false } = {}) {
   scene.add(floorGrid);
   dieAssembly.visible = currentCamera === 'model';
   floorGrid.visible = currentCamera === 'model';
+  profileAssembly.visible = currentCamera === 'model';
+  crossSectionAssembly.visible = currentCamera === 'front';
   scene.fog.density = currentCamera === 'front' ? 0 : .00036;
 
-  if (animate && !reduceMotion) {
+  if (animate && currentCamera === 'model' && !reduceMotion) {
     profileAssembly.scale.z = 0.004;
     extrusionAnimation = { start: performance.now(), duration: Math.min(1450, 720 + state.length * .12), group: profileAssembly };
     setRenderStatus(true);
@@ -609,7 +623,33 @@ function buildModel({ animate = false, refit = false } = {}) {
 
   updateMetrics();
   updateCopy();
-  if (refit) fitCamera(currentCamera, true);
+  if (refit) fitCamera(currentCamera, false);
+}
+
+function createCrossSection(shape) {
+  const geometry = new THREE.ShapeGeometry(shape, 48);
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  geometry.translate(-(box.min.x + box.max.x) / 2, -(box.min.y + box.max.y) / 2, 0);
+  geometry.computeVertexNormals();
+
+  const group = new THREE.Group();
+  group.name = 'cross-section';
+  const face = new THREE.Mesh(geometry, profileMaterial());
+  face.receiveShadow = true;
+  group.add(face);
+
+  const outline = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geometry, 1),
+    new THREE.LineBasicMaterial({
+      color: state.finish === 'black' ? 0x98a2a9 : 0x5f6970,
+      transparent: true,
+      opacity: .9
+    })
+  );
+  outline.position.z = .03;
+  group.add(outline);
+  return group;
 }
 
 function makeProfileShape() {
@@ -814,33 +854,48 @@ function totalHoleCount() { return holeCount() + state.customHoles.length; }
 
 function fitCamera(mode = 'model', smooth = false) {
   if (!camera || !controls) return;
+  cancelCameraTween();
+  $('.viewer-panel').dataset.view = mode;
   const dimensions = activeDimensions();
   const cross = Math.max(24, dimensions.width, dimensions.height);
   let position;
   let target;
   let frontDistance = 0;
+  let modelSpan = 0;
 
   if (mode === 'front') {
-    frontDistance = Math.max(state.length * 12, cross * 10);
-    target = new THREE.Vector3(0, 0, state.length / 2);
-    position = new THREE.Vector3(0, 0, state.length / 2 + frontDistance);
-    camera.zoom = frontDistance / (cross * 3.55);
+    const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+    const fitHeightDistance = dimensions.height / (2 * Math.tan(verticalFov / 2));
+    const fitWidthDistance = dimensions.width / (2 * Math.tan(verticalFov / 2) * Math.max(.25, camera.aspect));
+    frontDistance = Math.max(cross * 1.8, fitHeightDistance, fitWidthDistance) * 1.24;
+    target = new THREE.Vector3(0, 0, 0);
+    position = new THREE.Vector3(0, 0, frontDistance);
+    camera.zoom = 1;
     controls.autoRotate = false;
   } else {
-    const span = Math.max(state.length, cross * 8);
+    modelSpan = Math.max(state.length, cross * 8);
     // Look mostly down the extrusion axis: the geometry remains true-scale,
     // while the front face stays legible even on long 6 m profiles.
-    target = new THREE.Vector3(0, 0, -span * .1);
-    position = new THREE.Vector3(span * .14, span * .18, span * .92);
+    target = new THREE.Vector3(0, 0, -modelSpan * .1);
+    position = new THREE.Vector3(modelSpan * .14, modelSpan * .18, modelSpan * .92);
     camera.zoom = 1;
   }
 
   camera.near = Math.max(.1, cross / 200);
-  camera.far = Math.max(5000, state.length * 40, position.distanceTo(target) * 3);
+  camera.far = Math.max(5000, state.length * 8, position.distanceTo(target) * 5);
   camera.updateProjectionMatrix();
-  controls.minDistance = mode === 'front' ? frontDistance * .5 : cross * .7;
-  controls.maxDistance = mode === 'front' ? frontDistance * 1.5 : Math.max(state.length * 4, cross * 18);
+  controls.enableRotate = mode === 'model';
+  controls.enableZoom = true;
+  controls.minDistance = mode === 'front' ? frontDistance * .55 : modelSpan * .9;
+  controls.maxDistance = mode === 'front' ? frontDistance * 2.2 : modelSpan * 1.5;
+  controls.minPolarAngle = mode === 'front' ? 0 : .96;
+  controls.maxPolarAngle = mode === 'front' ? Math.PI : 1.42;
+  controls.minAzimuthAngle = mode === 'front' ? -Infinity : -.28;
+  controls.maxAzimuthAngle = mode === 'front' ? Infinity : .5;
+  renderer.domElement.style.cursor = mode === 'model' ? 'grab' : 'default';
   scene.fog.density = mode === 'front' ? 0 : .00036;
+  if (profileAssembly) profileAssembly.visible = mode === 'model';
+  if (crossSectionAssembly) crossSectionAssembly.visible = mode === 'front';
   if (dieAssembly) dieAssembly.visible = mode === 'model';
   if (floorGrid) floorGrid.visible = mode === 'model';
   const machiningMarkers = profileAssembly?.getObjectByName('machining-markers');
@@ -855,6 +910,7 @@ function fitCamera(mode = 'model', smooth = false) {
 }
 
 function tweenCamera(destination, target) {
+  cancelCameraTween();
   const startPosition = camera.position.clone();
   const startTarget = controls.target.clone();
   const start = performance.now();
@@ -864,9 +920,15 @@ function tweenCamera(destination, target) {
     const eased = 1 - Math.pow(1 - t, 3);
     camera.position.lerpVectors(startPosition, destination, eased);
     controls.target.lerpVectors(startTarget, target, eased);
-    if (t < 1) requestAnimationFrame(tick);
+    if (t < 1) cameraTweenFrame = requestAnimationFrame(tick);
+    else cameraTweenFrame = null;
   };
-  requestAnimationFrame(tick);
+  cameraTweenFrame = requestAnimationFrame(tick);
+}
+
+function cancelCameraTween() {
+  if (cameraTweenFrame !== null) cancelAnimationFrame(cameraTweenFrame);
+  cameraTweenFrame = null;
 }
 
 function animateScene(now = performance.now()) {
@@ -889,7 +951,11 @@ function setRenderStatus(rendering) {
   const status = $('#renderState');
   status.classList.toggle('rendering', rendering);
   status.querySelector('b').textContent = rendering ? 'Profils tiek ekstrudēts…' : 'Modelis gatavs';
-  status.querySelector('small').textContent = rendering ? `Virtuālais garums ${formatNumber(state.length)} mm` : 'Velc, lai pagrieztu · ritini, lai pietuvinātu';
+  status.querySelector('small').textContent = rendering
+    ? `Virtuālais garums ${formatNumber(state.length)} mm`
+    : currentCamera === 'front'
+      ? 'Stabils šķērsgriezums · ritini, lai pietuvinātu'
+      : 'Velc, lai pagrieztu · ritini, lai pietuvinātu';
 }
 
 function updateCopy() {
@@ -902,9 +968,9 @@ function updateCopy() {
 function profileDescription() {
   if (state.profile === 'custom') {
     const bounds = customBounds();
-    return `Custom profils · ${formatNumber(bounds.width)} × ${formatNumber(bounds.height)} mm`;
+    return `Savs rasējums · ${formatNumber(bounds.width)} × ${formatNumber(bounds.height)} mm`;
   }
-  if (state.profile === 'o') return `O profils · Ø${formatNumber(state.width)} × ${formatNumber(state.thickness, 1)} mm`;
+  if (state.profile === 'o') return `Apaļā caurule · Ø${formatNumber(state.width)} × ${formatNumber(state.thickness, 1)} mm`;
   if (state.profile === 'solid') return `Kastes profils · ${formatNumber(state.width)} × ${formatNumber(state.height)} mm · pilns`;
   return `${PROFILE_NAMES[state.profile]} · ${formatNumber(state.width)} × ${formatNumber(state.height)} × ${formatNumber(state.thickness, 1)} mm`;
 }
@@ -1063,7 +1129,7 @@ function prepareEmail() {
   const note = $('#noteInput').value.trim();
   const machiningParts = [];
   if (state.holes) machiningParts.push(`${holeCount()} periodiski × Ø${formatNumber(state.holeDiameter, 1)} mm; solis ${formatNumber(state.holeSpacing)} mm; atkāpe ${formatNumber(state.holeOffset)} mm`);
-  if (state.customHoles.length) machiningParts.push(`custom Z punkti: ${state.customHoles.map(value => `${formatNumber(value)} mm`).join(', ')}`);
+  if (state.customHoles.length) machiningParts.push(`atsevišķi Z punkti: ${state.customHoles.map(value => `${formatNumber(value)} mm`).join(', ')}`);
   const machining = machiningParts.join('; ') || 'nav norādīta';
   const shareUrl = `${location.origin}${location.pathname}#design=${encodeSharedState()}`;
   const body = [
