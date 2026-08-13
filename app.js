@@ -49,6 +49,9 @@ let currentCamera = 'front';
 let saveTimer;
 let toastTimer;
 let rebuildFrame;
+let resizeFitFrame;
+let rendererWidth = 0;
+let rendererHeight = 0;
 
 const mount = $('#webglMount');
 const sketchCanvas = $('#sketchCanvas');
@@ -166,9 +169,16 @@ function initScene() {
 function resizeRenderer() {
   const width = Math.max(1, mount.clientWidth);
   const height = Math.max(1, mount.clientHeight);
+  if (width === rendererWidth && height === rendererHeight) return;
+  rendererWidth = width;
+  rendererHeight = height;
   renderer.setSize(width, height, false);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
+  if (profileAssembly || crossSectionAssembly) {
+    cancelAnimationFrame(resizeFitFrame);
+    resizeFitFrame = requestAnimationFrame(() => fitCamera(currentCamera, false));
+  }
 }
 
 function bindInterface() {
