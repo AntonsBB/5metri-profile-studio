@@ -70,9 +70,13 @@
           <span class="profile-glyph glyph-o" aria-hidden="true"></span>
           <span><b>O profils</b><small>Apaļa caurule</small></span>
         </button>
-        <button class="profile-card" type="button" data-profile="box">
-          <span class="profile-glyph glyph-box" aria-hidden="true"></span>
-          <span><b>Kastes profils</b><small>Taisnstūra caurule</small></span>
+        <button class="profile-card" type="button" data-profile="solid">
+          <span class="profile-glyph glyph-solid" aria-hidden="true"></span>
+          <span><b>Kastes profils</b><small>Pilns taisnstūra stienis</small></span>
+        </button>
+        <button class="profile-card" type="button" data-profile="tube">
+          <span class="profile-glyph glyph-tube" aria-hidden="true"></span>
+          <span><b>Taisnstūra caurule</b><small>Doba iekšpuse</small></span>
         </button>
         <button class="profile-card custom-card" type="button" data-profile="custom">
           <span class="profile-glyph glyph-custom" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -88,11 +92,11 @@
         </div>
         <div class="measure-row" id="widthControl">
           <label for="widthRange"><span>Platums <i>W</i></span><output id="widthOutput">40</output></label>
-          <input id="widthRange" type="range" min="10" max="160" step="1" value="40">
+          <input id="widthRange" type="range" min="10" max="250" step="1" value="40">
         </div>
         <div class="measure-row" id="heightControl">
           <label for="heightRange"><span>Augstums <i>H</i></span><output id="heightOutput">40</output></label>
-          <input id="heightRange" type="range" min="10" max="160" step="1" value="40">
+          <input id="heightRange" type="range" min="10" max="250" step="1" value="40">
         </div>
         <div class="measure-row" id="thicknessControl">
           <label for="thicknessRange"><span>Sienas biezums <i>T</i></span><output id="thicknessOutput">3.0</output></label>
@@ -144,8 +148,8 @@
           <h2 id="viewerTitle">L profils · 40 × 40 × 3 mm</h2>
         </div>
         <div class="view-switcher" aria-label="Kameras skats">
-          <button class="active" type="button" data-camera="model">Modelis</button>
-          <button type="button" data-camera="front">Šķērsgriezums</button>
+          <button type="button" data-camera="model">Ražošanas skats</button>
+          <button class="active" type="button" data-camera="front">Šķērsgriezums</button>
         </div>
       </div>
 
@@ -191,13 +195,14 @@
 
       <section class="drawing-view active" data-drawing-view="section">
         <div class="canvas-meta">
-          <span><i class="grid-key"></i> 1 rūtiņa = 1 mm</span>
+          <span><i class="grid-key"></i> 1 rūtiņa = 1 mm · 250 × 250 mm</span>
           <span id="pointCount">6 punkti</span>
         </div>
         <div class="sketch-frame">
-          <svg id="sketchCanvas" viewBox="0 0 80 80" preserveAspectRatio="xMidYMid meet" aria-label="Profila šķērsgriezuma 1 milimetra režģis"></svg>
+          <svg id="sketchCanvas" viewBox="0 0 250 250" preserveAspectRatio="xMidYMid meet" aria-label="Profila šķērsgriezuma 250 reiz 250 milimetru režģis"></svg>
           <span class="axis-label axis-label-y">Y</span>
           <span class="axis-label axis-label-x">X</span>
+          <span class="snap-coordinate" id="snapCoordinate">X 0 · Y 0</span>
         </div>
         <div class="drawing-actions">
           <button id="undoPointButton" type="button">↶ Atcelt punktu</button>
@@ -206,7 +211,7 @@
         </div>
         <div class="drawing-tip">
           <span class="tip-number">1</span>
-          <p><b>Zīmē materiāla laukumu.</b> Spied uz režģa punktiem pulksteņrādītāja virzienā; aizpildītā zona kļūs par alumīniju.</p>
+          <p><b>Kursors vienmēr pieķeras tuvākajam 1 mm punktam.</b> Vari veidot arī slīpas malas — katrs nākamais punkts tiek savienots ar iepriekšējo.</p>
         </div>
         <div class="custom-measurements">
           <span><small>Rasējuma W</small><b id="customWidth">40 mm</b></span>
@@ -216,11 +221,13 @@
       </section>
 
       <section class="drawing-view" data-drawing-view="machining">
-        <div class="z-axis-preview" aria-hidden="true">
+        <div class="z-axis-preview" id="zAxisPreview" role="button" tabindex="0" aria-label="Noklikšķini uz profila, lai pievienotu atsevišķu urbumu gar Z asi">
           <span class="z-profile"></span>
           <span class="z-dimension"><i></i><b id="zPreviewLength">2 000 mm</b><i></i></span>
           <div class="hole-preview" id="holePreview"></div>
+          <div class="custom-hole-preview" id="customHolePreview"></div>
           <span class="z-label">Z</span>
+          <span class="z-hint">Klikšķini uz profila — dzeltenais punkts = custom urbums</span>
         </div>
         <label class="toggle-row" for="holesToggle">
           <span><b>Periodiski urbumi</b><small>Atzīmēt urbumu soli gar Z asi</small></span>
@@ -242,6 +249,18 @@
               <option value="side">Sānu plakne</option>
             </select>
           </label>
+        </div>
+        <div class="custom-machining">
+          <div class="custom-machining-head">
+            <span><b>Atsevišķi urbumi</b><small>Precīza pozīcija gar Z asi</small></span>
+            <b id="customHoleCount">0 punkti</b>
+          </div>
+          <div class="custom-hole-entry">
+            <label for="customHoleZ">Z pozīcija</label>
+            <span><input id="customHoleZ" type="number" min="0" max="6000" step="1" value="500"><b>mm</b></span>
+            <button id="addCustomHoleButton" type="button">+ Pievienot</button>
+          </div>
+          <div class="custom-hole-list" id="customHoleList"></div>
         </div>
         <div class="drawing-tip warning-tip">
           <span class="tip-number">!</span>

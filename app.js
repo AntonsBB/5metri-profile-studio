@@ -5,12 +5,13 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const STORAGE_KEY = '5metri-profile-studio-v1';
-const GRID_SIZE = 80;
+const GRID_SIZE = 250;
 const PROFILE_NAMES = {
   l: 'L profils',
   u: 'U profils',
   o: 'O profils',
-  box: 'Kastes profils',
+  solid: 'Kastes profils',
+  tube: 'Taisnstūra caurule',
   custom: 'Custom profils'
 };
 
@@ -27,7 +28,8 @@ const defaultState = {
   holeSpacing: 250,
   holeOffset: 50,
   holeFace: 'top',
-  customPoints: [[10, 10], [50, 10], [50, 15], [15, 15], [15, 50], [10, 50]],
+  customPoints: [[25, 25], [85, 25], [85, 31], [31, 31], [31, 85], [25, 85]],
+  customHoles: [],
   contourClosed: true,
   projectId: createProjectId()
 };
@@ -41,7 +43,7 @@ let profileAssembly;
 let dieAssembly;
 let floorGrid;
 let extrusionAnimation = null;
-let currentCamera = 'model';
+let currentCamera = 'front';
 let saveTimer;
 let toastTimer;
 let rebuildFrame;
@@ -54,7 +56,7 @@ initScene();
 bindInterface();
 syncInterface();
 renderSketch();
-buildModel({ animate: true, refit: true });
+buildModel({ animate: false, refit: true });
 animateScene();
 
 function createProjectId() {
@@ -77,9 +79,10 @@ function loadInitialState() {
 function normalizeState(value) {
   const allowedProfiles = Object.keys(PROFILE_NAMES);
   const clean = { ...value };
+  if (clean.profile === 'box') clean.profile = 'tube';
   if (!allowedProfiles.includes(clean.profile)) clean.profile = 'l';
-  clean.width = clamp(Number(clean.width) || 40, 10, 160);
-  clean.height = clamp(Number(clean.height) || 40, 10, 160);
+  clean.width = clamp(Number(clean.width) || 40, 10, 250);
+  clean.height = clamp(Number(clean.height) || 40, 10, 250);
   clean.thickness = clamp(Number(clean.thickness) || 3, 1, 12);
   clean.length = clamp(Number(clean.length) || 2000, 100, 6000);
   clean.holeDiameter = clamp(Number(clean.holeDiameter) || 6.5, 2, 30);
@@ -88,6 +91,9 @@ function normalizeState(value) {
   clean.customPoints = Array.isArray(clean.customPoints)
     ? clean.customPoints.filter(point => Array.isArray(point) && point.length === 2).map(([x, y]) => [clamp(Math.round(x), 0, GRID_SIZE), clamp(Math.round(y), 0, GRID_SIZE)])
     : structuredClone(defaultState.customPoints);
+  clean.customHoles = Array.isArray(clean.customHoles)
+    ? [...new Set(clean.customHoles.map(value => clamp(Math.round(Number(value) || 0), 0, clean.length)))].sort((a, b) => a - b)
+    : [];
   return clean;
 }
 
@@ -199,19 +205,23 @@ function bindInterface() {
 
   $$('.view-switcher button').forEach(button => {
     button.addEventListener('click', () => {
-      currentCamera = button.dataset.camera;
-      $$('.view-switcher button').forEach(item => item.classList.toggle('active', item === button));
-      fitCamera(currentCamera, true);
+      selectCamera(button.dataset.camera, true);
     });
   });
 
-  $('#renderButton').addEventListener('click', () => buildModel({ animate: true, refit: true }));
+  $('#renderButton').addEventListener('click', () => {
+    selectCamera('model', true);
+    buildModel({ animate: true, refit: false });
+  });
 
   $$('.drawing-tabs button').forEach(button => {
     button.addEventListener('click', () => setDrawingTab(button.dataset.drawingTab));
   });
 
   sketchCanvas.addEventListener('pointerdown', addSketchPoint);
+  sketchCanvas.addEventListener('pointermove', updateSnapPreview);
+  sketchCanvas.addEventListener('pointerenter', updateSnapPreview);
+  sketchCanvas.addEventListener('pointerleave', hideSnapPreview);
   $('#undoPointButton').addEventListener('click', () => {
     state.customPoints.pop();
     state.contourClosed = false;
@@ -245,6 +255,22 @@ function bindInterface() {
   bindNumber('#holeOffset', value => { state.holeOffset = clamp(value, 10, 500); });
   $('#holeFace').addEventListener('change', event => {
     state.holeFace = event.target.value;
+    buildModel({ animate: false, refit: false });
+    saveState();
+  });
+  $('#zAxisPreview').addEventListener('pointerdown', addCustomHoleFromPreview);
+  $('#zAxisPreview').addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      addCustomHole(Number($('#customHoleZ').value));
+    }
+  });
+  $('#addCustomHoleButton').addEventListener('click', () => addCustomHole(Number($('#customHoleZ').value)));
+  $('#customHoleList').addEventListener('click', event => {
+    const button = event.target.closest('[data-remove-hole]');
+    if (!button) return;
+    state.customHoles = state.customHoles.filter(value => value !== Number(button.dataset.removeHole));
+    syncMachining();
     buildModel({ animate: false, refit: false });
     saveState();
   });
@@ -317,7 +343,7 @@ function syncInterface() {
 
   $('#widthRange').disabled = custom;
   $('#heightRange').disabled = custom || round;
-  $('#thicknessRange').disabled = custom;
+  $('#thicknessRange').disabled = custom || state.profile === 'solid';
   ['#widthControl', '#heightControl', '#thicknessControl'].forEach(selector => {
     const disabled = $(selector).querySelector('input').disabled;
     $(selector).style.opacity = disabled ? '.45' : '1';
@@ -352,7 +378,14 @@ function setDrawingTab(tab) {
   $$('.drawing-view').forEach(view => view.classList.toggle('active', view.dataset.drawingView === tab));
 }
 
+function selectCamera(mode, smooth = false) {
+  currentCamera = mode;
+  $$('.view-switcher button').forEach(button => button.classList.toggle('active', button.dataset.camera === mode));
+  fitCamera(mode, smooth);
+}
+
 function syncMachining() {
+  state.customHoles = state.customHoles.filter(value => value >= 0 && value <= state.length).sort((a, b) => a - b);
   $('#holesToggle').checked = state.holes;
   $('#machiningControls').classList.toggle('disabled', !state.holes);
   $('#holeDiameter').value = state.holeDiameter;
@@ -365,12 +398,18 @@ function syncMachining() {
   $('#holePreview').innerHTML = state.holes
     ? Array.from({ length: Math.min(count, 10) }, () => '<i></i>').join('')
     : '';
+  $('#customHolePreview').innerHTML = state.customHoles.map(value => {
+    const position = state.length ? (value / state.length) * 100 : 0;
+    return `<i style="left:${position}%" data-z="${formatNumber(value)} mm"></i>`;
+  }).join('');
+  $('#customHoleCount').textContent = `${state.customHoles.length} ${state.customHoles.length === 1 ? 'punkts' : 'punkti'}`;
+  $('#customHoleZ').max = state.length;
+  $('#customHoleZ').value = clamp(Number($('#customHoleZ').value) || Math.min(500, state.length), 0, state.length);
+  $('#customHoleList').innerHTML = state.customHoles.map(value => `<button type="button" data-remove-hole="${value}" title="Noņemt punktu">Z ${formatNumber(value)} mm ×</button>`).join('');
 }
 
 function addSketchPoint(event) {
-  const rect = sketchCanvas.getBoundingClientRect();
-  const x = clamp(Math.round(((event.clientX - rect.left) / rect.width) * GRID_SIZE), 0, GRID_SIZE);
-  const y = clamp(Math.round((1 - (event.clientY - rect.top) / rect.height) * GRID_SIZE), 0, GRID_SIZE);
+  const { x, y } = snapPointFromEvent(event);
 
   if (state.contourClosed) {
     state.customPoints = [];
@@ -381,6 +420,63 @@ function addSketchPoint(event) {
   state.customPoints.push([x, y]);
   state.profile = 'custom';
   activateCustomDrawing();
+}
+
+function snapPointFromEvent(event) {
+  const rect = sketchCanvas.getBoundingClientRect();
+  return {
+    x: clamp(Math.round(((event.clientX - rect.left) / rect.width) * GRID_SIZE), 0, GRID_SIZE),
+    y: clamp(Math.round((1 - (event.clientY - rect.top) / rect.height) * GRID_SIZE), 0, GRID_SIZE)
+  };
+}
+
+function updateSnapPreview(event) {
+  const { x, y } = snapPointFromEvent(event);
+  const preview = $('#snapPreview', sketchCanvas);
+  if (!preview) return;
+  preview.style.visibility = 'visible';
+  $('#snapVertical', sketchCanvas).setAttribute('x1', x);
+  $('#snapVertical', sketchCanvas).setAttribute('x2', x);
+  $('#snapHorizontal', sketchCanvas).setAttribute('y1', GRID_SIZE - y);
+  $('#snapHorizontal', sketchCanvas).setAttribute('y2', GRID_SIZE - y);
+  $('#snapPoint', sketchCanvas).setAttribute('cx', x);
+  $('#snapPoint', sketchCanvas).setAttribute('cy', GRID_SIZE - y);
+  const last = state.customPoints.at(-1);
+  let angleText = '';
+  if (last && !state.contourClosed) {
+    const angle = Math.round((Math.atan2(y - last[1], x - last[0]) * 180 / Math.PI + 360) % 360);
+    angleText = ` · ${angle}°`;
+  }
+  $('#snapCoordinate').textContent = `X ${x} · Y ${y}${angleText}`;
+  $('.sketch-frame').classList.add('pointer-active');
+}
+
+function hideSnapPreview() {
+  const preview = $('#snapPreview', sketchCanvas);
+  if (preview) preview.style.visibility = 'hidden';
+  $('.sketch-frame').classList.remove('pointer-active');
+}
+
+function addCustomHoleFromPreview(event) {
+  const rect = $('#zAxisPreview').getBoundingClientRect();
+  const trackStart = rect.left + rect.width * .1;
+  const trackWidth = rect.width * .8;
+  const ratio = clamp((event.clientX - trackStart) / trackWidth, 0, 1);
+  addCustomHole(Math.round(ratio * state.length));
+}
+
+function addCustomHole(value) {
+  const z = clamp(Math.round(Number(value) || 0), 0, state.length);
+  if (state.customHoles.includes(z)) {
+    showToast(`Urbums pie Z ${formatNumber(z)} mm jau ir pievienots.`);
+    return;
+  }
+  state.customHoles = [...state.customHoles, z].sort((a, b) => a - b);
+  $('#customHoleZ').value = z;
+  syncMachining();
+  buildModel({ animate: false, refit: false });
+  saveState();
+  showToast(`Pievienots custom urbums: Z ${formatNumber(z)} mm.`);
 }
 
 function activateCustomDrawing() {
@@ -398,21 +494,26 @@ function renderSketch() {
   sketchCanvas.innerHTML = `
     <defs>
       <pattern id="minorGrid" width="1" height="1" patternUnits="userSpaceOnUse">
-        <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#dfe4e7" stroke-width="0.08"/>
+        <path d="M 1 0 L 0 0 0 1" fill="none" stroke="#dfe4e7" stroke-width="0.22"/>
       </pattern>
-      <pattern id="majorGrid" width="5" height="5" patternUnits="userSpaceOnUse">
-        <rect width="5" height="5" fill="url(#minorGrid)"/>
-        <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#b7c0c6" stroke-width="0.18"/>
+      <pattern id="majorGrid" width="10" height="10" patternUnits="userSpaceOnUse">
+        <rect width="10" height="10" fill="url(#minorGrid)"/>
+        <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#aeb8be" stroke-width="0.5"/>
       </pattern>
       <linearGradient id="aluminiumFill" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="#f7f9fa"/><stop offset=".36" stop-color="#aeb7bd"/><stop offset=".6" stop-color="#e8ecee"/><stop offset="1" stop-color="#929da4"/>
       </linearGradient>
     </defs>
-    <rect width="80" height="80" fill="url(#majorGrid)"/>
-    <line x1="0" y1="79.6" x2="80" y2="79.6" stroke="#d12630" stroke-width=".35"/>
-    <line x1=".4" y1="0" x2=".4" y2="80" stroke="#d12630" stroke-width=".35"/>
-    ${points.length ? `<polyline points="${svgPoints}${closed ? ` ${svgPoints.split(' ')[0]}` : ''}" fill="${closed ? 'url(#aluminiumFill)' : 'rgba(209,38,48,.07)'}" stroke="#d12630" stroke-width=".65" stroke-linejoin="round"/>` : ''}
-    ${points.map(([x, y], index) => `<circle cx="${x}" cy="${GRID_SIZE - y}" r="${index === 0 ? 1.25 : 1}" fill="${index === 0 ? '#1e2328' : '#d12630'}" stroke="#fff" stroke-width=".45"/>`).join('')}
+    <rect width="${GRID_SIZE}" height="${GRID_SIZE}" fill="url(#majorGrid)"/>
+    <line x1="0" y1="${GRID_SIZE - .7}" x2="${GRID_SIZE}" y2="${GRID_SIZE - .7}" stroke="#d12630" stroke-width=".7"/>
+    <line x1=".7" y1="0" x2=".7" y2="${GRID_SIZE}" stroke="#d12630" stroke-width=".7"/>
+    ${points.length ? `<polyline points="${svgPoints}${closed ? ` ${svgPoints.split(' ')[0]}` : ''}" fill="${closed ? 'url(#aluminiumFill)' : 'rgba(209,38,48,.07)'}" stroke="#d12630" stroke-width="1.1" stroke-linejoin="round"/>` : ''}
+    ${points.map(([x, y], index) => `<circle cx="${x}" cy="${GRID_SIZE - y}" r="${index === 0 ? 2.2 : 1.8}" fill="${index === 0 ? '#1e2328' : '#d12630'}" stroke="#fff" stroke-width=".8"/>`).join('')}
+    <g id="snapPreview" style="visibility:hidden;pointer-events:none">
+      <line id="snapVertical" y1="0" y2="${GRID_SIZE}" stroke="#d12630" stroke-width=".45" stroke-dasharray="2 2" opacity=".65"/>
+      <line id="snapHorizontal" x1="0" x2="${GRID_SIZE}" stroke="#d12630" stroke-width=".45" stroke-dasharray="2 2" opacity=".65"/>
+      <circle id="snapPoint" r="3.2" fill="#ffd33d" stroke="#1e2328" stroke-width="1.2"/>
+    </g>
   `;
 
   $('#pointCount').textContent = `${points.length} ${points.length === 1 ? 'punkts' : 'punkti'}`;
@@ -492,6 +593,9 @@ function buildModel({ animate = false, refit = false } = {}) {
   scene.add(dieAssembly);
   floorGrid = createFloor(dimensions);
   scene.add(floorGrid);
+  dieAssembly.visible = currentCamera === 'model';
+  floorGrid.visible = currentCamera === 'model';
+  scene.fog.density = currentCamera === 'front' ? 0 : .00036;
 
   if (animate && !reduceMotion) {
     profileAssembly.scale.z = 0.004;
@@ -523,7 +627,10 @@ function makeProfileShape() {
     shape.holes.push(hole);
     return shape;
   }
-  if (state.profile === 'box') {
+  if (state.profile === 'solid') {
+    return shapeFromPoints([[0, 0], [w, 0], [w, h], [0, h]]);
+  }
+  if (state.profile === 'tube') {
     const shape = shapeFromPoints([[0, 0], [w, 0], [w, h], [0, h]]);
     const hole = new THREE.Path();
     hole.moveTo(t, t);
@@ -576,23 +683,70 @@ function profileMaterial() {
 
 function createDie(dimensions) {
   const group = new THREE.Group();
-  const dieWidth = Math.max(155, dimensions.width * 2.2);
-  const dieHeight = Math.max(145, dimensions.height * 2.2);
-  const geometry = new THREE.BoxGeometry(dieWidth, dieHeight, 28);
-  const material = new THREE.MeshStandardMaterial({ color: 0x343a3e, metalness: .86, roughness: .4 });
-  const die = new THREE.Mesh(geometry, material);
-  die.position.z = -state.length / 2 - 20;
-  die.castShadow = true;
-  die.receiveShadow = true;
-  group.add(die);
+  const openingWidth = Math.max(38, dimensions.width + 18);
+  const openingHeight = Math.max(38, dimensions.height + 18);
+  const pressWidth = Math.max(320, openingWidth + 190);
+  const pressHeight = Math.max(280, openingHeight + 170);
+  const faceZ = -state.length / 2 - 34;
+  const frameDepth = 68;
+  const steel = new THREE.MeshStandardMaterial({ color: 0x566169, metalness: .72, roughness: .34 });
+  const darkSteel = new THREE.MeshStandardMaterial({ color: 0x2c3439, metalness: .64, roughness: .44 });
+  const redSteel = new THREE.MeshStandardMaterial({ color: 0xb82029, metalness: .42, roughness: .42 });
+  const yellow = new THREE.MeshStandardMaterial({ color: 0xe7b52b, metalness: .28, roughness: .48 });
 
-  const rim = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0x687177, transparent: true, opacity: .6 }));
-  rim.position.copy(die.position);
-  group.add(rim);
+  const addBox = (width, height, depth, x, y, z, material = steel) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), new THREE.LineBasicMaterial({ color: 0x707a81, transparent: true, opacity: .46 }));
+    outline.position.copy(mesh.position);
+    group.add(outline);
+    return mesh;
+  };
 
-  const badge = new THREE.Mesh(new THREE.BoxGeometry(34, 12, 2), new THREE.MeshStandardMaterial({ color: 0xb51f28, metalness: .3, roughness: .55 }));
-  badge.position.set(-dieWidth * .28, dieHeight * .35, -state.length / 2 - 35);
-  group.add(badge);
+  const sideWidth = (pressWidth - openingWidth) / 2;
+  const capHeight = (pressHeight - openingHeight) / 2;
+  addBox(sideWidth, pressHeight, frameDepth, -(openingWidth + sideWidth) / 2, 0, faceZ, steel);
+  addBox(sideWidth, pressHeight, frameDepth, (openingWidth + sideWidth) / 2, 0, faceZ, steel);
+  addBox(openingWidth, capHeight, frameDepth, 0, (openingHeight + capHeight) / 2, faceZ, darkSteel);
+  addBox(openingWidth, capHeight, frameDepth, 0, -(openingHeight + capHeight) / 2, faceZ, darkSteel);
+
+  // Red die-retaining frame around the actual extrusion opening.
+  const rim = 10;
+  const frontZ = faceZ + frameDepth / 2 + 2;
+  addBox(openingWidth + rim * 2, rim, 5, 0, openingHeight / 2 + rim / 2, frontZ, redSteel);
+  addBox(openingWidth + rim * 2, rim, 5, 0, -openingHeight / 2 - rim / 2, frontZ, redSteel);
+  addBox(rim, openingHeight, 5, -openingWidth / 2 - rim / 2, 0, frontZ, redSteel);
+  addBox(rim, openingHeight, 5, openingWidth / 2 + rim / 2, 0, frontZ, redSteel);
+
+  // Press body, hydraulic barrels, base and safety details make the machine readable.
+  addBox(pressWidth + 65, 44, 150, 0, pressHeight / 2 + 22, faceZ - 45, steel);
+  addBox(pressWidth + 85, 34, 175, 0, -pressHeight / 2 - 17, faceZ - 45, darkSteel);
+  addBox(42, 92, 115, -pressWidth * .34, -pressHeight / 2 - 70, faceZ - 48, steel);
+  addBox(42, 92, 115, pressWidth * .34, -pressHeight / 2 - 70, faceZ - 48, steel);
+  addBox(pressWidth * .72, 26, 7, 0, pressHeight / 2 + 22, frontZ + 4, redSteel);
+  addBox(72, 28, 7, -pressWidth * .28, pressHeight * .27, frontZ + 4, yellow);
+
+  [-1, 1].forEach(direction => {
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(27, 34, 150, 24), darkSteel);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(direction * pressWidth * .28, 0, faceZ - 102);
+    barrel.castShadow = true;
+    group.add(barrel);
+  });
+
+  const boltMaterial = new THREE.MeshStandardMaterial({ color: 0x9ba5ac, metalness: .92, roughness: .2 });
+  [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([x, y]) => {
+    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 4, 16), boltMaterial);
+    bolt.rotation.x = Math.PI / 2;
+    bolt.position.set(x * (openingWidth / 2 + 22), y * (openingHeight / 2 + 22), frontZ + 4);
+    group.add(bolt);
+  });
+  const workLight = new THREE.PointLight(0xffd3b0, 38, 900, 2);
+  workLight.position.set(0, pressHeight * .22, frontZ + 170);
+  group.add(workLight);
   return group;
 }
 
@@ -618,15 +772,18 @@ function createFloor(dimensions) {
 }
 
 function addMachiningMarkers(group, dimensions) {
-  if (!state.holes) return;
-  const positions = holePositions();
+  const markerGroup = new THREE.Group();
+  markerGroup.name = 'machining-markers';
+  markerGroup.visible = currentCamera === 'model';
+  group.add(markerGroup);
   const radius = Math.min(state.holeDiameter / 2, Math.max(1, Math.min(dimensions.width, dimensions.height) * .22));
   const markerMaterial = new THREE.MeshStandardMaterial({ color: 0x15191c, metalness: .42, roughness: .38 });
-  const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xe05259 });
+  const periodicRing = new THREE.MeshBasicMaterial({ color: 0xe05259 });
+  const customRing = new THREE.MeshBasicMaterial({ color: 0xffce3a });
 
-  positions.slice(0, 48).forEach(z => {
+  const addMarker = (z, ringMaterial, scale = 1) => {
     const marker = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1.5, 20), markerMaterial);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(radius * 1.2, Math.max(.45, radius * .1), 8, 20), ringMaterial);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(radius * 1.2 * scale, Math.max(.55, radius * .12), 8, 20), ringMaterial);
     if (state.holeFace === 'side') {
       marker.rotation.z = Math.PI / 2;
       marker.position.set(dimensions.width / 2 + .4, 0, z);
@@ -638,8 +795,11 @@ function addMachiningMarkers(group, dimensions) {
       ring.position.set(0, dimensions.height / 2 + 1.2, z);
     }
     marker.castShadow = true;
-    group.add(marker, ring);
-  });
+    markerGroup.add(marker, ring);
+  };
+
+  holePositions().slice(0, 48).forEach(z => addMarker(z, periodicRing));
+  state.customHoles.slice(0, 48).forEach(z => addMarker(z, customRing, 1.28));
 }
 
 function holePositions() {
@@ -650,6 +810,7 @@ function holePositions() {
 }
 
 function holeCount() { return holePositions().length; }
+function totalHoleCount() { return holeCount() + state.customHoles.length; }
 
 function fitCamera(mode = 'model', smooth = false) {
   if (!camera || !controls) return;
@@ -657,10 +818,13 @@ function fitCamera(mode = 'model', smooth = false) {
   const cross = Math.max(24, dimensions.width, dimensions.height);
   let position;
   let target;
+  let frontDistance = 0;
 
   if (mode === 'front') {
+    frontDistance = Math.max(state.length * 12, cross * 10);
     target = new THREE.Vector3(0, 0, state.length / 2);
-    position = new THREE.Vector3(0, 0, state.length / 2 + cross * 3.15);
+    position = new THREE.Vector3(0, 0, state.length / 2 + frontDistance);
+    camera.zoom = frontDistance / (cross * 3.55);
     controls.autoRotate = false;
   } else {
     const span = Math.max(state.length, cross * 8);
@@ -668,13 +832,19 @@ function fitCamera(mode = 'model', smooth = false) {
     // while the front face stays legible even on long 6 m profiles.
     target = new THREE.Vector3(0, 0, -span * .1);
     position = new THREE.Vector3(span * .14, span * .18, span * .92);
+    camera.zoom = 1;
   }
 
   camera.near = Math.max(.1, cross / 200);
-  camera.far = Math.max(5000, state.length * 16);
+  camera.far = Math.max(5000, state.length * 40, position.distanceTo(target) * 3);
   camera.updateProjectionMatrix();
-  controls.minDistance = cross * .7;
-  controls.maxDistance = Math.max(state.length * 4, cross * 18);
+  controls.minDistance = mode === 'front' ? frontDistance * .5 : cross * .7;
+  controls.maxDistance = mode === 'front' ? frontDistance * 1.5 : Math.max(state.length * 4, cross * 18);
+  scene.fog.density = mode === 'front' ? 0 : .00036;
+  if (dieAssembly) dieAssembly.visible = mode === 'model';
+  if (floorGrid) floorGrid.visible = mode === 'model';
+  const machiningMarkers = profileAssembly?.getObjectByName('machining-markers');
+  if (machiningMarkers) machiningMarkers.visible = mode === 'model';
 
   if (smooth && !reduceMotion) tweenCamera(position, target);
   else {
@@ -735,6 +905,7 @@ function profileDescription() {
     return `Custom profils · ${formatNumber(bounds.width)} × ${formatNumber(bounds.height)} mm`;
   }
   if (state.profile === 'o') return `O profils · Ø${formatNumber(state.width)} × ${formatNumber(state.thickness, 1)} mm`;
+  if (state.profile === 'solid') return `Kastes profils · ${formatNumber(state.width)} × ${formatNumber(state.height)} mm · pilns`;
   return `${PROFILE_NAMES[state.profile]} · ${formatNumber(state.width)} × ${formatNumber(state.height)} × ${formatNumber(state.thickness, 1)} mm`;
 }
 
@@ -745,7 +916,8 @@ function crossSectionArea() {
   if (state.profile === 'l') return w * t + (h - t) * t;
   if (state.profile === 'u') return w * t + 2 * (h - t) * t;
   if (state.profile === 'o') return Math.PI * (Math.pow(w / 2, 2) - Math.pow(Math.max(0, w / 2 - t), 2));
-  if (state.profile === 'box') return w * h - Math.max(0, w - 2 * t) * Math.max(0, h - 2 * t);
+  if (state.profile === 'solid') return w * h;
+  if (state.profile === 'tube') return w * h - Math.max(0, w - 2 * t) * Math.max(0, h - 2 * t);
   return polygonArea(state.customPoints);
 }
 
@@ -755,7 +927,7 @@ function updateMetrics() {
   $('#metricLength').textContent = `${formatNumber(state.length)} mm`;
   $('#metricArea').textContent = `${formatNumber(area, 1)} mm²`;
   $('#metricWeight').textContent = `${formatNumber(weight, 2)} kg/m`;
-  $('#metricMachining').textContent = state.holes ? `${holeCount()} × Ø${formatNumber(state.holeDiameter, 1)}` : 'Nav';
+  $('#metricMachining').textContent = totalHoleCount() ? `${totalHoleCount()} × Ø${formatNumber(state.holeDiameter, 1)}` : 'Nav';
 }
 
 function disposeObject(object) {
@@ -787,7 +959,7 @@ function specification() {
     dimensionsMm: {
       width: dimensions.width,
       height: dimensions.height,
-      wallThickness: state.profile === 'custom' ? null : state.thickness,
+      wallThickness: ['custom', 'solid'].includes(state.profile) ? null : state.thickness,
       length: state.length
     },
     customContourMm: state.profile === 'custom' ? state.customPoints : null,
@@ -795,13 +967,16 @@ function specification() {
     theoreticalWeightKgM: Number((crossSectionArea() * .0027).toFixed(3)),
     alloy: state.alloy,
     finish: state.finish,
-    machining: state.holes ? {
-      operation: 'periodic-holes',
+    machining: (state.holes || state.customHoles.length) ? {
       diameterMm: state.holeDiameter,
-      spacingMm: state.holeSpacing,
-      endOffsetMm: state.holeOffset,
       face: state.holeFace,
-      count: holeCount()
+      periodic: state.holes ? {
+        spacingMm: state.holeSpacing,
+        endOffsetMm: state.holeOffset,
+        count: holeCount()
+      } : null,
+      customPositionsMm: state.customHoles,
+      totalCount: totalHoleCount()
     } : null,
     note: 'Concept specification. Final manufacturability and tolerances must be approved by a technologist.',
     generatedAt: new Date().toISOString()
@@ -822,6 +997,7 @@ function encodeSharedState() {
     holeSpacing: state.holeSpacing,
     holeOffset: state.holeOffset,
     holeFace: state.holeFace,
+    customHoles: state.customHoles,
     customPoints: state.customPoints,
     contourClosed: state.contourClosed,
     projectId: state.projectId
@@ -853,7 +1029,7 @@ function openRfq() {
     <span><small>Garums</small><b>${formatNumber(state.length)} mm</b></span>
     <span><small>Materiāls</small><b>${state.alloy}</b></span>
     <span><small>Masa</small><b>${formatNumber(crossSectionArea() * .0027, 2)} kg/m</b></span>
-    <span><small>Apstrāde</small><b>${state.holes ? `${holeCount()} urbumi` : 'Bez urbumiem'}</b></span>
+    <span><small>Apstrāde</small><b>${totalHoleCount() ? `${totalHoleCount()} urbumi` : 'Bez urbumiem'}</b></span>
     <span><small>Projekts</small><b>${state.projectId}</b></span>
   `;
   $('#rfqDialog').showModal();
@@ -885,7 +1061,10 @@ function prepareEmail() {
   const phone = $('#phoneInput').value.trim();
   const quantity = $('#quantityInput').value.trim();
   const note = $('#noteInput').value.trim();
-  const machining = state.holes ? `${holeCount()} × Ø${formatNumber(state.holeDiameter, 1)} mm; solis ${formatNumber(state.holeSpacing)} mm; atkāpe ${formatNumber(state.holeOffset)} mm` : 'nav norādīta';
+  const machiningParts = [];
+  if (state.holes) machiningParts.push(`${holeCount()} periodiski × Ø${formatNumber(state.holeDiameter, 1)} mm; solis ${formatNumber(state.holeSpacing)} mm; atkāpe ${formatNumber(state.holeOffset)} mm`);
+  if (state.customHoles.length) machiningParts.push(`custom Z punkti: ${state.customHoles.map(value => `${formatNumber(value)} mm`).join(', ')}`);
+  const machining = machiningParts.join('; ') || 'nav norādīta';
   const shareUrl = `${location.origin}${location.pathname}#design=${encodeSharedState()}`;
   const body = [
     'Labdien!',
