@@ -40,7 +40,7 @@ let camera;
 let renderer;
 let controls;
 let profileAssembly;
-let crossSectionAssembly;
+let profilePreviewAssembly;
 let dieAssembly;
 let floorGrid;
 let extrusionAnimation = null;
@@ -175,7 +175,7 @@ function resizeRenderer() {
   renderer.setSize(width, height, false);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
-  if (profileAssembly || crossSectionAssembly) {
+  if (profileAssembly || profilePreviewAssembly) {
     cancelAnimationFrame(resizeFitFrame);
     resizeFitFrame = requestAnimationFrame(() => fitCamera(currentCamera, false));
   }
@@ -570,7 +570,7 @@ function polygonArea(points) {
 
 function buildModel({ animate = false, refit = false } = {}) {
   if (profileAssembly) disposeObject(profileAssembly);
-  if (crossSectionAssembly) disposeObject(crossSectionAssembly);
+  if (profilePreviewAssembly) disposeObject(profilePreviewAssembly);
   if (dieAssembly) disposeObject(dieAssembly);
   if (floorGrid) disposeObject(floorGrid);
   extrusionAnimation = null;
@@ -607,8 +607,8 @@ function buildModel({ animate = false, refit = false } = {}) {
   const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
   profileAssembly.add(edges);
 
-  crossSectionAssembly = createCrossSection(shape);
-  scene.add(crossSectionAssembly);
+  profilePreviewAssembly = createProfilePreview(shape, dimensions);
+  scene.add(profilePreviewAssembly);
 
   addMachiningMarkers(profileAssembly, dimensions);
   dieAssembly = createDie(dimensions);
@@ -618,7 +618,7 @@ function buildModel({ animate = false, refit = false } = {}) {
   dieAssembly.visible = currentCamera === 'model';
   floorGrid.visible = currentCamera === 'model';
   profileAssembly.visible = currentCamera === 'model';
-  crossSectionAssembly.visible = currentCamera === 'front';
+  profilePreviewAssembly.visible = currentCamera === 'front';
   scene.fog.density = currentCamera === 'front' ? 0 : .00036;
 
   if (animate && currentCamera === 'model' && !reduceMotion) {
@@ -636,28 +636,43 @@ function buildModel({ animate = false, refit = false } = {}) {
   if (refit) fitCamera(currentCamera, false);
 }
 
-function createCrossSection(shape) {
-  const geometry = new THREE.ShapeGeometry(shape, 48);
+function createProfilePreview(shape, dimensions) {
+  const cross = Math.max(24, dimensions.width, dimensions.height);
+  const previewDepth = clamp(cross * 2.4, 64, 420);
+  const bevel = Math.min(.45, Math.max(.16, cross * .006));
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: previewDepth,
+    steps: 1,
+    curveSegments: 48,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    bevelSize: bevel,
+    bevelThickness: bevel
+  });
   geometry.computeBoundingBox();
   const box = geometry.boundingBox;
-  geometry.translate(-(box.min.x + box.max.x) / 2, -(box.min.y + box.max.y) / 2, 0);
+  geometry.translate(
+    -(box.min.x + box.max.x) / 2,
+    -(box.min.y + box.max.y) / 2,
+    -(box.min.z + box.max.z) / 2
+  );
   geometry.computeVertexNormals();
 
   const group = new THREE.Group();
-  group.name = 'cross-section';
-  const face = new THREE.Mesh(geometry, profileMaterial());
-  face.receiveShadow = true;
-  group.add(face);
+  group.name = 'profile-preview';
+  const mesh = new THREE.Mesh(geometry, profileMaterial());
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
 
   const outline = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geometry, 1),
+    new THREE.EdgesGeometry(geometry, 28),
     new THREE.LineBasicMaterial({
       color: state.finish === 'black' ? 0x98a2a9 : 0x5f6970,
       transparent: true,
-      opacity: .9
+      opacity: .72
     })
   );
-  outline.position.z = .03;
   group.add(outline);
   return group;
 }
@@ -875,11 +890,13 @@ function fitCamera(mode = 'model', smooth = false) {
 
   if (mode === 'front') {
     const verticalFov = THREE.MathUtils.degToRad(camera.fov);
-    const fitHeightDistance = dimensions.height / (2 * Math.tan(verticalFov / 2));
-    const fitWidthDistance = dimensions.width / (2 * Math.tan(verticalFov / 2) * Math.max(.25, camera.aspect));
-    frontDistance = Math.max(cross * 1.8, fitHeightDistance, fitWidthDistance) * 1.24;
+    const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(.25, camera.aspect));
+    const fitFov = Math.min(verticalFov, horizontalFov);
+    const previewDepth = clamp(cross * 2.4, 64, 420);
+    const previewRadius = Math.hypot(dimensions.width, dimensions.height, previewDepth) / 2;
+    frontDistance = (previewRadius / Math.sin(fitFov / 2)) * 1.08;
     target = new THREE.Vector3(0, 0, 0);
-    position = new THREE.Vector3(0, 0, frontDistance);
+    position = new THREE.Vector3(.3, .2, 1.7).normalize().multiplyScalar(frontDistance);
     camera.zoom = 1;
     controls.autoRotate = false;
   } else {
@@ -902,10 +919,10 @@ function fitCamera(mode = 'model', smooth = false) {
   controls.maxPolarAngle = mode === 'front' ? Math.PI : 1.42;
   controls.minAzimuthAngle = mode === 'front' ? -Infinity : -.28;
   controls.maxAzimuthAngle = mode === 'front' ? Infinity : .5;
-  renderer.domElement.style.cursor = mode === 'model' ? 'grab' : 'default';
+  renderer.domElement.style.cursor = mode === 'model' ? 'grab' : 'zoom-in';
   scene.fog.density = mode === 'front' ? 0 : .00036;
   if (profileAssembly) profileAssembly.visible = mode === 'model';
-  if (crossSectionAssembly) crossSectionAssembly.visible = mode === 'front';
+  if (profilePreviewAssembly) profilePreviewAssembly.visible = mode === 'front';
   if (dieAssembly) dieAssembly.visible = mode === 'model';
   if (floorGrid) floorGrid.visible = mode === 'model';
   const machiningMarkers = profileAssembly?.getObjectByName('machining-markers');
@@ -964,7 +981,7 @@ function setRenderStatus(rendering) {
   status.querySelector('small').textContent = rendering
     ? `Virtuālais garums ${formatNumber(state.length)} mm`
     : currentCamera === 'front'
-      ? 'Stabils šķērsgriezums · ritini, lai pietuvinātu'
+      ? 'Fiksēts 3D profila skats · ritini, lai pietuvinātu'
       : 'Velc, lai pagrieztu · ritini, lai pietuvinātu';
 }
 
