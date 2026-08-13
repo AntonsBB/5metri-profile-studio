@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260813-profile3d">
+  <link rel="stylesheet" href="styles.css?v=20260813-engine-rebuild">
   <script type="importmap">
     {
       "imports": {
@@ -162,7 +162,7 @@
 
       <div class="render-state" id="renderState" aria-live="polite">
         <span class="render-dot"></span>
-        <span><b>Modelis gatavs</b><small>Fiksēts 3D profila skats · ritini, lai pietuvinātu</small></span>
+        <span><b>Modelis gatavs</b><small>Velc: grozi · Shift + velc: pārbīdi · ritini: tuvini</small></span>
       </div>
 
       <div class="viewer-toolbar">
@@ -174,7 +174,7 @@
         </div>
         <button class="render-button" id="renderButton" type="button">
           <span class="render-icon" aria-hidden="true"></span>
-          <span><b>Ekstrudēt profilu</b><small>Atjaunot 3D modeli</small></span>
+          <span><b>Ekstrudēt profilu</b><small>Atskaņot ražošanas animāciju</small></span>
         </button>
       </div>
     </section>
@@ -211,7 +211,7 @@
         </div>
         <div class="drawing-tip">
           <span class="tip-number">1</span>
-          <p><b>Kursors vienmēr pieķeras tuvākajam 1 mm punktam.</b> Vari veidot arī slīpas malas — katrs nākamais punkts tiek savienots ar iepriekšējo.</p>
+          <p><b>Punkts tiek nolikts tikai tuvākajā 1 mm režģa krustpunktā.</b> Tas nekad nenonāk rūtiņas vidū; maksimālā novirze katrā asī ir 0,5 mm. Slīpas malas ir atļautas.</p>
         </div>
         <div class="custom-measurements">
           <span><small>Rasējuma W</small><b id="customWidth">40 mm</b></span>
@@ -279,21 +279,22 @@
     <form method="dialog" id="rfqForm">
       <div class="dialog-head">
         <div><span class="eyebrow">Ražošanas pieprasījums</span><h2>Nosūti profilu pārbaudei</h2></div>
-        <button class="dialog-close" value="cancel" aria-label="Aizvērt">×</button>
+        <button class="dialog-close" id="closeRfqButton" type="button" aria-label="Aizvērt">×</button>
       </div>
       <p class="dialog-intro">Mēs saņemsim izmērus, materiālu un apstrādes parametrus. 5 METRI tehnologs pārbaudīs ražojamību un sagatavos nākamo soli.</p>
       <div class="rfq-summary" id="rfqSummary"></div>
       <div class="dialog-grid">
         <label>Uzņēmums<input id="companyInput" name="company" autocomplete="organization" placeholder="SIA Piemērs"></label>
         <label>Daudzums<input id="quantityInput" name="quantity" type="number" min="1" value="100"><span class="field-unit">gab.</span></label>
-        <label>E-pasts<input id="emailInput" name="email" type="email" autocomplete="email" placeholder="vards@uznemums.lv"></label>
+        <label>E-pasts<input id="emailInput" name="email" type="email" autocomplete="email" placeholder="vards@uznemums.lv" required></label>
         <label>Tālrunis<input id="phoneInput" name="phone" autocomplete="tel" placeholder="+371 ..."></label>
         <label class="span-two">Piezīme<textarea id="noteInput" name="note" rows="3" placeholder="Paredzētais pielietojums, gada apjoms, vēlamais termiņš..."></textarea></label>
       </div>
-      <p class="privacy-note">Poga sagatavos e-pastu tavā e-pasta lietotnē; profila specifikāciju varēsi lejupielādēt un pievienot vēstulei.</p>
+      <p class="privacy-note delivery-note" id="rfqDeliveryStatus" aria-live="polite">Pieprasījums tiks nosūtīts tieši uz <b>abb@5metri.lv</b>. E-pasta lietotne nav nepieciešama.</p>
       <div class="dialog-actions">
         <button class="button button-ghost dark" id="downloadSpecButton" type="button">Lejupielādēt specifikāciju</button>
-        <button class="button button-primary" id="emailRfqButton" type="button">Sagatavot e-pastu →</button>
+        <button class="button button-ghost dark" id="emailFallbackButton" type="button">Atvērt e-pastu</button>
+        <button class="button button-primary" id="emailRfqButton" type="submit">Nosūtīt pieprasījumu →</button>
       </div>
     </form>
   </dialog>
@@ -313,6 +314,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <noscript>Šim konfiguratoram nepieciešams JavaScript, lai izveidotu 3D modeli.</noscript>
-  <script type="module" src="app.js?v=20260813-profile3d"></script>
+  <script type="module" src="app.js?v=20260813-engine-rebuild"></script>
 </body>
 </html>

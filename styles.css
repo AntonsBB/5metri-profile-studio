@@ -410,7 +410,10 @@ dialog::backdrop { background: rgba(10,13,15,.72); backdrop-filter: blur(4px); }
 .dialog-grid .span-two { grid-column: 1 / -1; }.dialog-grid textarea { min-height: 70px; }
 .field-unit { position: absolute; right: 10px; bottom: 12px; color: #8e969c; font-size: 8px; }
 .privacy-note { margin: 12px 0; padding: 9px 10px; color: #6d614b; background: #fff8e9; border-left: 3px solid var(--amber); font-size: 8px; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.delivery-note[data-state="sending"] { color: #365069; background: #eef7ff; border-left-color: #4f8fc7; }
+.delivery-note[data-state="success"] { color: #1d6040; background: #effbf4; border-left-color: var(--green); }
+.delivery-note[data-state="error"] { color: #8a2027; background: #fff0f1; border-left-color: var(--red); }
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .help-steps { display: grid; gap: 13px; padding: 0; margin: 20px 0; list-style: none; }
 .help-steps li { display: flex; align-items: flex-start; gap: 11px; }
 .help-steps li > span { width: 27px; height: 27px; flex: 0 0 auto; display: grid; place-items: center; color: #fff; background: var(--graphite); border-radius: 50%; font-size: 10px; font-weight: 800; }

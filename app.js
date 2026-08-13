@@ -6,6 +6,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const STORAGE_KEY = '5metri-profile-studio-v1';
 const GRID_SIZE = 250;
+const RFQ_ENDPOINT = 'https://formsubmit.co/ajax/abb@5metri.lv';
 const PROFILE_NAMES = {
   l: 'L veida profils',
   u: 'U veida profils',
@@ -40,7 +41,6 @@ let camera;
 let renderer;
 let controls;
 let profileAssembly;
-let profilePreviewAssembly;
 let dieAssembly;
 let floorGrid;
 let extrusionAnimation = null;
@@ -56,6 +56,7 @@ let rendererHeight = 0;
 const mount = $('#webglMount');
 const sketchCanvas = $('#sketchCanvas');
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
 initScene();
 bindInterface();
@@ -137,7 +138,9 @@ function initScene() {
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.065;
-  controls.enablePan = false;
+  controls.enablePan = true;
+  controls.screenSpacePanning = true;
+  controls.zoomToCursor = true;
   controls.autoRotate = false;
   controls.autoRotateSpeed = 0.24;
   controls.target.set(0, 0, 0);
@@ -161,6 +164,10 @@ function initScene() {
   warm.position.set(-300, 120, -500);
   scene.add(warm);
 
+  const lowFill = new THREE.DirectionalLight(0xd9e7f2, 2.15);
+  lowFill.position.set(-360, -420, 520);
+  scene.add(lowFill);
+
   const resizeObserver = new ResizeObserver(resizeRenderer);
   resizeObserver.observe(mount);
   resizeRenderer();
@@ -175,7 +182,7 @@ function resizeRenderer() {
   renderer.setSize(width, height, false);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
-  if (profileAssembly || profilePreviewAssembly) {
+  if (profileAssembly) {
     cancelAnimationFrame(resizeFitFrame);
     resizeFitFrame = requestAnimationFrame(() => fitCamera(currentCamera, false));
   }
@@ -226,7 +233,7 @@ function bindInterface() {
 
   $('#renderButton').addEventListener('click', () => {
     selectCamera('model', false);
-    buildModel({ animate: true, refit: false });
+    startExtrusionAnimation();
   });
 
   $$('.drawing-tabs button').forEach(button => {
@@ -292,12 +299,13 @@ function bindInterface() {
 
   $$('.mobile-tabs button').forEach(button => button.addEventListener('click', () => setMobilePanel(button.dataset.panel)));
   $('#openRfqButton').addEventListener('click', openRfq);
+  $('#closeRfqButton').addEventListener('click', () => $('#rfqDialog').close());
   $('#shareButton').addEventListener('click', shareDesign);
   $('#saveDraftButton').addEventListener('click', () => { saveState(true); showToast('Melnraksts saglabāts šajā ierīcē.'); });
   $('#helpButton').addEventListener('click', () => $('#helpDialog').showModal());
   $('#downloadSpecButton').addEventListener('click', downloadSpecification);
-  $('#emailRfqButton').addEventListener('click', prepareEmail);
-  $('#rfqForm').addEventListener('submit', event => event.preventDefault());
+  $('#emailFallbackButton').addEventListener('click', prepareEmail);
+  $('#rfqForm').addEventListener('submit', sendRfq);
 
   window.addEventListener('keydown', event => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
@@ -441,18 +449,35 @@ function addSketchPoint(event) {
   state.customPoints.push([x, y]);
   state.profile = 'custom';
   activateCustomDrawing();
+  requestAnimationFrame(() => updateSnapPreview(event));
 }
 
 function snapPointFromEvent(event) {
   const rect = sketchCanvas.getBoundingClientRect();
+  const rawX = clamp(((event.clientX - rect.left) / rect.width) * GRID_SIZE, 0, GRID_SIZE);
+  const rawY = clamp((1 - (event.clientY - rect.top) / rect.height) * GRID_SIZE, 0, GRID_SIZE);
+  const minX = Math.floor(rawX);
+  const maxX = Math.ceil(rawX);
+  const minY = Math.floor(rawY);
+  const maxY = Math.ceil(rawY);
+  const candidates = [
+    [minX, minY], [minX, maxY], [maxX, minY], [maxX, maxY]
+  ];
+  const [x, y] = candidates.reduce((closest, candidate) => {
+    const candidateDistance = Math.hypot(rawX - candidate[0], rawY - candidate[1]);
+    const closestDistance = Math.hypot(rawX - closest[0], rawY - closest[1]);
+    return candidateDistance < closestDistance ? candidate : closest;
+  });
   return {
-    x: clamp(Math.round(((event.clientX - rect.left) / rect.width) * GRID_SIZE), 0, GRID_SIZE),
-    y: clamp(Math.round((1 - (event.clientY - rect.top) / rect.height) * GRID_SIZE), 0, GRID_SIZE)
+    x: clamp(x, 0, GRID_SIZE),
+    y: clamp(y, 0, GRID_SIZE),
+    errorX: Math.abs(rawX - x),
+    errorY: Math.abs(rawY - y)
   };
 }
 
 function updateSnapPreview(event) {
-  const { x, y } = snapPointFromEvent(event);
+  const { x, y, errorX, errorY } = snapPointFromEvent(event);
   const preview = $('#snapPreview', sketchCanvas);
   if (!preview) return;
   preview.style.visibility = 'visible';
@@ -468,7 +493,7 @@ function updateSnapPreview(event) {
     const angle = Math.round((Math.atan2(y - last[1], x - last[0]) * 180 / Math.PI + 360) % 360);
     angleText = ` · ${angle}°`;
   }
-  $('#snapCoordinate').textContent = `X ${x} · Y ${y}${angleText}`;
+  $('#snapCoordinate').textContent = `X ${x} mm · Y ${y} mm${angleText} · ΔX ${formatNumber(errorX, 2)} · ΔY ${formatNumber(errorY, 2)} mm`;
   $('.sketch-frame').classList.add('pointer-active');
 }
 
@@ -570,7 +595,6 @@ function polygonArea(points) {
 
 function buildModel({ animate = false, refit = false } = {}) {
   if (profileAssembly) disposeObject(profileAssembly);
-  if (profilePreviewAssembly) disposeObject(profilePreviewAssembly);
   if (dieAssembly) disposeObject(dieAssembly);
   if (floorGrid) disposeObject(floorGrid);
   extrusionAnimation = null;
@@ -599,16 +623,9 @@ function buildModel({ animate = false, refit = false } = {}) {
   const material = profileMaterial();
   const mesh = new THREE.Mesh(geometry, material);
   mesh.castShadow = true;
-  mesh.receiveShadow = true;
+  // Avoid shallow-angle self-shadow acne on long (up to 6 m) extrusions.
+  mesh.receiveShadow = false;
   profileAssembly.add(mesh);
-
-  const edgeGeometry = new THREE.EdgesGeometry(geometry, 28);
-  const edgeMaterial = new THREE.LineBasicMaterial({ color: state.finish === 'black' ? 0x68727a : 0x6f787e, transparent: true, opacity: 0.62 });
-  const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
-  profileAssembly.add(edges);
-
-  profilePreviewAssembly = createProfilePreview(shape, dimensions);
-  scene.add(profilePreviewAssembly);
 
   addMachiningMarkers(profileAssembly, dimensions);
   dieAssembly = createDie(dimensions);
@@ -617,64 +634,32 @@ function buildModel({ animate = false, refit = false } = {}) {
   scene.add(floorGrid);
   dieAssembly.visible = currentCamera === 'model';
   floorGrid.visible = currentCamera === 'model';
-  profileAssembly.visible = currentCamera === 'model';
-  profilePreviewAssembly.visible = currentCamera === 'front';
-  scene.fog.density = currentCamera === 'front' ? 0 : .00036;
+  profileAssembly.visible = true;
+  scene.fog.density = currentCamera === 'front' ? 0 : .000075;
 
-  if (animate && currentCamera === 'model' && !reduceMotion) {
-    profileAssembly.scale.z = 0.004;
-    extrusionAnimation = { start: performance.now(), duration: Math.min(1450, 720 + state.length * .12), group: profileAssembly };
-    setRenderStatus(true);
-  } else {
-    profileAssembly.scale.z = 1;
-    extrusionAnimation = null;
-    setRenderStatus(false);
-  }
+  profileAssembly.scale.z = 1;
+  extrusionAnimation = null;
+  setRenderStatus(false);
 
   updateMetrics();
   updateCopy();
   if (refit) fitCamera(currentCamera, false);
 }
 
-function createProfilePreview(shape, dimensions) {
-  const cross = Math.max(24, dimensions.width, dimensions.height);
-  const previewDepth = clamp(cross * 2.4, 64, 420);
-  const bevel = Math.min(.45, Math.max(.16, cross * .006));
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: previewDepth,
-    steps: 1,
-    curveSegments: 48,
-    bevelEnabled: true,
-    bevelSegments: 2,
-    bevelSize: bevel,
-    bevelThickness: bevel
-  });
-  geometry.computeBoundingBox();
-  const box = geometry.boundingBox;
-  geometry.translate(
-    -(box.min.x + box.max.x) / 2,
-    -(box.min.y + box.max.y) / 2,
-    -(box.min.z + box.max.z) / 2
-  );
-  geometry.computeVertexNormals();
-
-  const group = new THREE.Group();
-  group.name = 'profile-preview';
-  const mesh = new THREE.Mesh(geometry, profileMaterial());
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  group.add(mesh);
-
-  const outline = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geometry, 28),
-    new THREE.LineBasicMaterial({
-      color: state.finish === 'black' ? 0x98a2a9 : 0x5f6970,
-      transparent: true,
-      opacity: .72
-    })
-  );
-  group.add(outline);
-  return group;
+function startExtrusionAnimation() {
+  if (!profileAssembly) return;
+  profileAssembly.scale.z = reduceMotion ? 1 : .004;
+  if (reduceMotion) {
+    extrusionAnimation = null;
+    setRenderStatus(false);
+    return;
+  }
+  extrusionAnimation = {
+    start: performance.now(),
+    duration: Math.min(1800, 900 + state.length * .12),
+    group: profileAssembly
+  };
+  setRenderStatus(true);
 }
 
 function makeProfileShape() {
@@ -818,8 +803,8 @@ function createDie(dimensions) {
 function createFloor(dimensions) {
   const group = new THREE.Group();
   const floorY = -Math.max(58, dimensions.height / 2 + 38);
-  const gridSize = Math.max(1600, state.length * 1.55);
-  const grid = new THREE.GridHelper(gridSize, 44, 0x596168, 0x30363a);
+  const gridSize = 8000;
+  const grid = new THREE.GridHelper(gridSize, 32, 0x596168, 0x30363a);
   grid.position.set(0, floorY, 0);
   grid.material.transparent = true;
   grid.material.opacity = .42;
@@ -883,46 +868,54 @@ function fitCamera(mode = 'model', smooth = false) {
   $('.viewer-panel').dataset.view = mode;
   const dimensions = activeDimensions();
   const cross = Math.max(24, dimensions.width, dimensions.height);
+  const profileTipZ = state.length / 2;
+  const tipTarget = new THREE.Vector3(0, 0, profileTipZ - Math.min(cross * .2, state.length * .04));
   let position;
   let target;
-  let frontDistance = 0;
-  let modelSpan = 0;
+  let minDistance;
+  let maxDistance;
+  let nearPlane;
 
   if (mode === 'front') {
-    const verticalFov = THREE.MathUtils.degToRad(camera.fov);
-    const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(.25, camera.aspect));
-    const fitFov = Math.min(verticalFov, horizontalFov);
-    const previewDepth = clamp(cross * 2.4, 64, 420);
-    const previewRadius = Math.hypot(dimensions.width, dimensions.height, previewDepth) / 2;
-    frontDistance = (previewRadius / Math.sin(fitFov / 2)) * 1.08;
-    target = new THREE.Vector3(0, 0, 0);
-    position = new THREE.Vector3(.3, .2, 1.7).normalize().multiplyScalar(frontDistance);
-    camera.zoom = 1;
+    // A distant perspective camera behaves almost orthographically at the end
+    // face, but it still operates on the same full-length 3D mesh.
+    const frontDistance = Math.max(state.length * 12, cross * 30);
+    const frontAngle = Math.min(.08, Math.max(.0015, Math.min(cross * .35, 18) / state.length));
+    target = tipTarget;
+    position = target.clone().add(new THREE.Vector3(frontAngle, frontAngle * .65, 1).normalize().multiplyScalar(frontDistance));
+    minDistance = frontDistance * .35;
+    maxDistance = frontDistance * 1.8;
+    nearPlane = frontDistance * .08;
+    camera.zoom = frontDistance / (cross * 3.6);
     controls.autoRotate = false;
   } else {
-    modelSpan = Math.max(state.length, cross * 8);
-    // Look mostly down the extrusion axis: the geometry remains true-scale,
-    // while the front face stays legible even on long 6 m profiles.
-    target = new THREE.Vector3(0, 0, -modelSpan * .1);
-    position = new THREE.Vector3(modelSpan * .14, modelSpan * .18, modelSpan * .92);
+    const productionDistance = 1500 + state.length * .28;
+    target = tipTarget;
+    position = target.clone().add(new THREE.Vector3(.15, .11, .95).normalize().multiplyScalar(productionDistance));
+    minDistance = Math.max(cross * 1.2, 30);
+    maxDistance = 14000;
+    nearPlane = Math.max(2, Math.min(productionDistance * .01, minDistance * .25));
     camera.zoom = 1;
   }
 
-  camera.near = Math.max(.1, cross / 200);
-  camera.far = Math.max(5000, state.length * 8, position.distanceTo(target) * 5);
+  camera.near = nearPlane;
+  camera.far = Math.max(30000, state.length * 20, position.distanceTo(target) * 3);
   camera.updateProjectionMatrix();
-  controls.enableRotate = mode === 'model';
+  controls.enableRotate = true;
+  controls.enablePan = true;
   controls.enableZoom = true;
-  controls.minDistance = mode === 'front' ? frontDistance * .55 : modelSpan * .9;
-  controls.maxDistance = mode === 'front' ? frontDistance * 2.2 : modelSpan * 1.5;
-  controls.minPolarAngle = mode === 'front' ? 0 : .96;
-  controls.maxPolarAngle = mode === 'front' ? Math.PI : 1.42;
-  controls.minAzimuthAngle = mode === 'front' ? -Infinity : -.28;
-  controls.maxAzimuthAngle = mode === 'front' ? Infinity : .5;
-  renderer.domElement.style.cursor = mode === 'model' ? 'grab' : 'zoom-in';
-  scene.fog.density = mode === 'front' ? 0 : .00036;
-  if (profileAssembly) profileAssembly.visible = mode === 'model';
-  if (profilePreviewAssembly) profilePreviewAssembly.visible = mode === 'front';
+  controls.minDistance = minDistance;
+  controls.maxDistance = maxDistance;
+  controls.rotateSpeed = mode === 'front' ? .32 : .38;
+  controls.panSpeed = mode === 'front' ? Math.min(.016, .008 * (2000 / state.length)) : .12;
+  controls.zoomSpeed = .72;
+  controls.minPolarAngle = mode === 'front' ? Math.PI / 2 - .85 : .62;
+  controls.maxPolarAngle = mode === 'front' ? Math.PI / 2 + .85 : 1.52;
+  controls.minAzimuthAngle = mode === 'front' ? -.85 : -1.2;
+  controls.maxAzimuthAngle = mode === 'front' ? .85 : 1.2;
+  renderer.domElement.style.cursor = 'grab';
+  scene.fog.density = mode === 'front' ? 0 : .000075;
+  if (profileAssembly) profileAssembly.visible = true;
   if (dieAssembly) dieAssembly.visible = mode === 'model';
   if (floorGrid) floorGrid.visible = mode === 'model';
   const machiningMarkers = profileAssembly?.getObjectByName('machining-markers');
@@ -981,8 +974,12 @@ function setRenderStatus(rendering) {
   status.querySelector('small').textContent = rendering
     ? `Virtuālais garums ${formatNumber(state.length)} mm`
     : currentCamera === 'front'
-      ? 'Fiksēts 3D profila skats · ritini, lai pietuvinātu'
-      : 'Velc, lai pagrieztu · ritini, lai pietuvinātu';
+      ? coarsePointer
+        ? '1 pirksts: grozi · 2 pirksti: pārbīdi un tuvini'
+        : 'Velc: grozi · Shift + velc: pārbīdi · ritini: tuvini'
+      : coarsePointer
+        ? 'Tas pats pilna garuma profils · 2 pirksti: pārbīdi un tuvini'
+        : 'Tas pats profils pilnā mērogā · fokuss uz profila galu';
 }
 
 function updateCopy() {
@@ -1125,6 +1122,9 @@ function openRfq() {
     <span><small>Apstrāde</small><b>${totalHoleCount() ? `${totalHoleCount()} urbumi` : 'Bez urbumiem'}</b></span>
     <span><small>Projekts</small><b>${state.projectId}</b></span>
   `;
+  const delivery = $('#rfqDeliveryStatus');
+  delivery.dataset.state = '';
+  delivery.innerHTML = 'Pieprasījums tiks nosūtīts tieši uz <b>abb@5metri.lv</b>. E-pasta lietotne nav nepieciešama.';
   $('#rfqDialog').showModal();
 }
 
@@ -1148,7 +1148,7 @@ function downloadSpecification() {
   showToast('Specifikācija lejupielādēta.');
 }
 
-function prepareEmail() {
+function rfqDetails() {
   const company = $('#companyInput').value.trim();
   const email = $('#emailInput').value.trim();
   const phone = $('#phoneInput').value.trim();
@@ -1159,7 +1159,7 @@ function prepareEmail() {
   if (state.customHoles.length) machiningParts.push(`atsevišķi Z punkti: ${state.customHoles.map(value => `${formatNumber(value)} mm`).join(', ')}`);
   const machining = machiningParts.join('; ') || 'nav norādīta';
   const shareUrl = `${location.origin}${location.pathname}#design=${encodeSharedState()}`;
-  const body = [
+  const message = [
     'Labdien!',
     '',
     `Lūdzu pārbaudīt alumīnija profila ${state.projectId} ražošanas iespējas un sagatavot nākamo soli.`,
@@ -1178,9 +1178,82 @@ function prepareEmail() {
     '',
     `Interaktīvais dizains: ${shareUrl}`,
     '',
-    'Pielikumā pievienošu no Profilu studijas lejupielādēto specifikācijas failu.'
+    'Pilnā profila specifikācija ir pievienota pieprasījuma datos.'
   ].join('\n');
-  location.href = `mailto:abb@5metri.lv?subject=${encodeURIComponent(`Profila pieprasījums ${state.projectId}`)}&body=${encodeURIComponent(body)}`;
+  return { company, email, phone, quantity, note, machining, shareUrl, message };
+}
+
+async function sendRfq(event) {
+  event.preventDefault();
+  const form = $('#rfqForm');
+  if (!form.reportValidity()) return;
+
+  const details = rfqDetails();
+  const button = $('#emailRfqButton');
+  const delivery = $('#rfqDeliveryStatus');
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Nosūta…';
+  delivery.dataset.state = 'sending';
+  delivery.textContent = 'Nosūta profila parametrus un kontakta informāciju…';
+
+  const payload = {
+    _subject: `Profila pieprasījums ${state.projectId}`,
+    _template: 'table',
+    _captcha: 'false',
+    _url: location.href,
+    projekts: state.projectId,
+    profils: profileDescription(),
+    garums_mm: state.length,
+    materials: state.alloy,
+    apdare: finishName(),
+    daudzums_gab: details.quantity || 'nav norādīts',
+    apstrade: details.machining,
+    uznemums: details.company || 'nav norādīts',
+    email: details.email,
+    talrunis: details.phone || 'nav norādīts',
+    piezime: details.note || 'nav',
+    dizaina_saite: details.shareUrl,
+    specifikacija_json: JSON.stringify(specification()),
+    message: details.message
+  };
+
+  try {
+    const response = await fetch(RFQ_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.success === false || result.success === 'false') {
+      throw new Error(result.message || `HTTP ${response.status}`);
+    }
+    const serviceMessage = String(result.message || '');
+    const needsActivation = /activat|confirm/i.test(serviceMessage);
+    delivery.dataset.state = needsActivation ? 'sending' : 'success';
+    delivery.innerHTML = needsActivation
+      ? `<b>Pieprasījums ${state.projectId} reģistrēts.</b> Lai tas nonāktu pastkastē, 5 METRI vienreiz jāapstiprina FormSubmit aktivizācijas e-pasts, kas nosūtīts uz abb@5metri.lv.`
+      : `<b>Pieprasījums ${state.projectId} pieņemts nosūtīšanai.</b> Piegādes serviss apstiprināja profila datu un kontaktinformācijas saņemšanu.`;
+    button.textContent = needsActivation ? 'Reģistrēts ✓' : 'Nosūtīts ✓';
+    showToast(needsActivation ? 'Pieprasījums reģistrēts; jāapstiprina saņēmēja adrese.' : 'Ražošanas pieprasījums nosūtīts 5 METRI.');
+  } catch (error) {
+    console.error('RFQ delivery failed', error);
+    delivery.dataset.state = 'error';
+    delivery.innerHTML = '<b>Neizdevās apstiprināt piegādi.</b> Mēģini vēlreiz vai izmanto pogu “Atvērt e-pastu”. Nekas netiek uzrādīts kā nosūtīts bez servera apstiprinājuma.';
+    button.disabled = false;
+    button.textContent = 'Mēģināt vēlreiz →';
+    return;
+  }
+
+  setTimeout(() => {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }, 3000);
+}
+
+function prepareEmail() {
+  const { message } = rfqDetails();
+  location.href = `mailto:abb@5metri.lv?subject=${encodeURIComponent(`Profila pieprasījums ${state.projectId}`)}&body=${encodeURIComponent(message)}`;
 }
 
 function finishName() {
