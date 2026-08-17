@@ -1,7 +1,7 @@
 window.STORE_CONFIG = {
   currency: 'EUR',
   vatRate: 0.21,
-  checkoutEndpoint: '',
+  checkoutEndpoint: 'https://5metri-checkout.abbrains.xyz/checkout',
   paymentLinks: {}
 };
 
