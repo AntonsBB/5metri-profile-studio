@@ -1,5 +1,6 @@
-const STRIPE_API_VERSION = '2026-06-24.dahlia';
+const STRIPE_API_VERSION = '2026-07-29.dahlia';
 const INTEGRATION_IDENTIFIER = '5metri_web_uslohdrp';
+const PHYSICAL_GOODS_TAX_CODE = 'txcd_99999999';
 const MAX_BODY_BYTES = 8_192;
 const MAX_LINE_ITEMS = 20;
 const MAX_QUANTITY = 100;
@@ -59,13 +60,42 @@ function validateCart(body) {
   return { items, fulfillment: body.fulfillment, checkoutAttemptId: body.checkoutAttemptId };
 }
 
-function buildStripeParams(cart, env) {
+async function readJsonBody(request) {
+  const statedLength = Number(request.headers.get('Content-Length') || 0);
+  if (statedLength > MAX_BODY_BYTES) throw new RangeError('Request too large');
+  if (!request.body) return null;
+
+  const reader = request.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > MAX_BODY_BYTES) {
+      await reader.cancel();
+      throw new RangeError('Request too large');
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+function buildStripeParams(cart) {
   const params = new URLSearchParams({
     mode: 'payment',
     success_url: `${env.SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: env.STORE_URL,
     customer_creation: 'always',
     billing_address_collection: 'required',
+    'automatic_tax[enabled]': 'true',
     'phone_number_collection[enabled]': 'true',
     'tax_id_collection[enabled]': 'true',
     'invoice_creation[enabled]': 'true',
@@ -86,9 +116,9 @@ function buildStripeParams(cart, env) {
     params.set(`${prefix}[price_data][tax_behavior]`, 'exclusive');
     params.set(`${prefix}[price_data][product_data][name]`, `${item.product.name} · ${item.length} m`);
     params.set(`${prefix}[price_data][product_data][description]`, item.product.finish);
+    params.set(`${prefix}[price_data][product_data][tax_code]`, PHYSICAL_GOODS_TAX_CODE);
     params.set(`${prefix}[price_data][product_data][metadata][product_id]`, item.productId);
     params.set(`${prefix}[price_data][product_data][metadata][length_m]`, String(item.length));
-    params.set(`${prefix}[tax_rates][0]`, env.STRIPE_LV_TAX_RATE_ID);
   });
 
   return params;
@@ -103,7 +133,7 @@ async function createCheckoutSession(cart, env) {
       'Stripe-Version': STRIPE_API_VERSION,
       'Idempotency-Key': `5metri-checkout-${cart.checkoutAttemptId}`
     },
-    body: buildStripeParams(cart, env)
+    body: buildStripeParams(cart)
   });
   const result = await response.json();
   if (!response.ok || typeof result.url !== 'string') {
@@ -131,18 +161,20 @@ export default {
     if (!allowedOrigin) return json({ error: 'Origin not allowed' }, 403, '');
     if (request.method === 'OPTIONS') return preflight(allowedOrigin);
     if (url.pathname !== '/checkout' || request.method !== 'POST') return json({ error: 'Not found' }, 404, allowedOrigin);
-    if (!env.STRIPE_SECRET_KEY || !env.STRIPE_LV_TAX_RATE_ID) return json({ error: 'Checkout is not configured' }, 503, allowedOrigin);
-
-    const contentLength = Number(request.headers.get('Content-Length') || 0);
-    if (contentLength > MAX_BODY_BYTES) return json({ error: 'Request too large' }, 413, allowedOrigin);
+    if (!env.STRIPE_SECRET_KEY) return json({ error: 'Checkout is not configured' }, 503, allowedOrigin);
+    if (!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json')) {
+      return json({ error: 'Content type must be application/json' }, 415, allowedOrigin);
+    }
 
     try {
-      const body = await request.json();
+      const body = await readJsonBody(request);
       const cart = validateCart(body);
       if (!cart) return json({ error: 'Invalid cart' }, 400, allowedOrigin);
       const checkoutUrl = await createCheckoutSession(cart, env);
       return json({ url: checkoutUrl }, 200, allowedOrigin);
     } catch (error) {
+      if (error instanceof RangeError) return json({ error: 'Request too large' }, 413, allowedOrigin);
+      if (error instanceof SyntaxError) return json({ error: 'Invalid JSON' }, 400, allowedOrigin);
       console.error(JSON.stringify({
         message: 'Checkout request failed',
         error: error instanceof Error ? error.message : 'Unknown error',

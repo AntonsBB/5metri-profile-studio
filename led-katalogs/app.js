@@ -1,7 +1,20 @@
 const CART_KEY = '5metri-led-cart-v2';
 const money = new Intl.NumberFormat('lv-LV', { style: 'currency', currency: STORE_CONFIG.currency });
 const productById = id => PRODUCTS.find(product => product.id === id);
-const imagePath = (product, image = product.images[0]) => `assets/products/${product.slug}/${image}`;
+const isQuotedProduct = product => product?.availability === 'quote' || typeof product?.price !== 'number' || !Number.isFinite(product.price);
+const imagePath = (product, image = product.images[0]) => /^https:\/\//i.test(image) ? image : `assets/products/${product.slug}/${image}`;
+
+function escapeHtml(value) {
+  const characters = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+  return String(value ?? '').replace(/[&<>"']/g, character => characters[character]);
+}
+
+function normalizeSearch(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('lv');
+}
 
 let cart = loadCart();
 let currentGalleryIndex = 0;
@@ -11,7 +24,10 @@ function loadCart() {
   try {
     const stored = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
     return Array.isArray(stored)
-      ? stored.filter(item => productById(item.productId) && [2, 3].includes(Number(item.length)) && Number(item.quantity) > 0)
+      ? stored.filter(item => {
+        const product = productById(item.productId);
+        return product && !isQuotedProduct(product) && [2, 3].includes(Number(item.length)) && Number(item.quantity) > 0;
+      })
       : [];
   } catch {
     return [];
@@ -24,26 +40,53 @@ function saveCart() {
 }
 
 function categoryName(category) {
-  if (category === 'shadow') return 'Ēnu šuve';
-  if (category === 'separator') return 'Dalījuma profils';
-  return 'LED profils';
+  const names = {
+    shadow: 'Ēnu šuvju profili',
+    separator: 'Dalījuma profili',
+    led: 'LED profili',
+    aluminium: 'Alumīnija profili',
+    mini: 'MINI profili',
+    decorative: 'Dekoratīvie profili',
+    floor: 'Grīdas profili',
+    tile: 'Flīžu profili',
+    skirting: 'Grīdlīstes',
+    pvc: 'PVC profili'
+  };
+  return names[category] || 'Profili';
+}
+
+function cartSubtotal() {
+  return cart.reduce((sum, item) => {
+    const product = productById(item.productId);
+    return sum + product.price * Number(item.length) * Number(item.quantity);
+  }, 0);
 }
 
 function productCard(product) {
+  const href = `product.html?id=${encodeURIComponent(product.id)}`;
+  const category = categoryName(product.category);
+  const finish = product.finish || category;
+  const categoryMeta = normalizeSearch(finish) === normalizeSearch(category)
+    ? ''
+    : `<span>${escapeHtml(category)}</span>`;
+  const quoteOnly = isQuotedProduct(product);
+  const price = quoteOnly
+    ? '<span class="product-card__price product-card__price--quote"><b>Cena pēc pieprasījuma</b><small>Saņemt individuālu piedāvājumu</small></span>'
+    : `<span class="product-card__price"><b>${money.format(product.price)}</b><small>par metru bez PVN</small></span>`;
   return `
     <article class="product-card">
-      <a class="product-card__image" href="product.html?id=${encodeURIComponent(product.id)}">
-        <img src="${imagePath(product)}" alt="${product.name}, ${product.finish.toLowerCase()}" loading="lazy">
-        <span class="product-card__badge">${categoryName(product.category)}</span>
+      <a class="product-card__image" href="${href}">
+        <img src="${escapeHtml(imagePath(product))}" alt="${escapeHtml(`${product.name}, ${finish}`)}" loading="lazy">
+        <span class="product-card__badge">${escapeHtml(category)}</span>
         <span class="image-count" aria-label="${product.images.length} attēli">${product.images.length}</span>
       </a>
       <div class="product-card__body">
-        <div class="product-card__meta"><span>${product.id}</span><span>${product.dimensions}</span></div>
-        <h3><a href="product.html?id=${encodeURIComponent(product.id)}">${product.name}</a></h3>
-        <p class="product-card__finish">${product.finish}</p>
+        <div class="product-card__meta"><span>${escapeHtml(product.id)}</span><span>${escapeHtml(product.dimensions)}</span></div>
+        <h3><a href="${href}" title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</a></h3>
+        <p class="product-card__finish"><span>${escapeHtml(finish)}</span>${categoryMeta}</p>
         <div class="product-card__footer">
-          <span class="product-card__price"><b>${money.format(product.price)}</b><small>par metru bez PVN</small></span>
-          <a class="product-card__link" href="product.html?id=${encodeURIComponent(product.id)}">Apskatīt</a>
+          ${price}
+          <a class="product-card__link" href="${href}">Apskatīt</a>
         </div>
       </div>
     </article>`;
@@ -59,10 +102,21 @@ function setupCatalog() {
   let activeFilter = 'all';
 
   function render() {
-    const term = search.value.trim().toLocaleLowerCase('lv');
+    const term = normalizeSearch(search.value.trim());
     const visible = PRODUCTS.filter(product => {
-      const filterMatch = activeFilter === 'all' || product.category === activeFilter;
-      const text = `${product.name} ${product.finish} ${product.dimensions} ${product.id}`.toLocaleLowerCase('lv');
+      const filterMatch = activeFilter === 'all'
+        || (activeFilter === 'signature' && ['shadow', 'led', 'separator'].includes(product.category))
+        || product.category === activeFilter;
+      const text = normalizeSearch([
+        product.name,
+        product.finish,
+        product.dimensions,
+        product.id,
+        product.description,
+        product.sourceCategory,
+        categoryName(product.category),
+        ...(product.details || [])
+      ].join(' '));
       return filterMatch && text.includes(term);
     });
     grid.innerHTML = visible.map(productCard).join('');
@@ -72,7 +126,11 @@ function setupCatalog() {
 
   filters.forEach(button => button.addEventListener('click', () => {
     activeFilter = button.dataset.filter;
-    filters.forEach(filter => filter.classList.toggle('active', filter === button));
+    filters.forEach(filter => {
+      const active = filter === button;
+      filter.classList.toggle('active', active);
+      filter.setAttribute('aria-pressed', String(active));
+    });
     render();
   }));
   search.addEventListener('input', render);
@@ -90,29 +148,26 @@ function setupProductPage() {
   document.querySelector('#productFinish').textContent = product.finish;
   document.querySelector('#productName').textContent = product.name;
   document.querySelector('#productDescription').textContent = product.description;
-  document.querySelector('#productPrice').textContent = money.format(product.price);
-  document.querySelector('#productGrossPrice').textContent = `${money.format(product.price * (1 + STORE_CONFIG.vatRate))} / m ar PVN`;
-  document.querySelector('#price2m').textContent = `${money.format(product.price * 2 * (1 + STORE_CONFIG.vatRate))} ar PVN`;
-  document.querySelector('#price3m').textContent = `${money.format(product.price * 3 * (1 + STORE_CONFIG.vatRate))} ar PVN`;
+  document.querySelector('meta[name="description"]')?.setAttribute('content', product.description);
 
   const specs = [
     ['Produkta kods', product.id],
     ['Izmērs', product.dimensions],
-    ['Apdare', product.finish],
-    ['Materiāls', 'Alumīnijs'],
-    ...product.details.map((detail, index) => [`${index + 1}. īpašība`, detail])
+    ['Kategorija', categoryName(product.category)],
+    ['Kolekcija / apdare', product.finish],
+    ...(product.details || []).map((detail, index) => [`${index + 1}. īpašība`, detail])
   ];
-  document.querySelector('#productSpecs').innerHTML = specs.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('');
+  document.querySelector('#productSpecs').innerHTML = specs.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('');
   document.querySelector('#relatedGrid').innerHTML = PRODUCTS
     .filter(item => item.id !== product.id && item.category === product.category)
-    .slice(0, 3)
+    .slice(0, 4)
     .map(productCard)
     .join('');
 
   const thumbs = document.querySelector('#galleryThumbs');
   thumbs.innerHTML = product.images.map((image, index) => `
     <button class="gallery-thumb${index === 0 ? ' active' : ''}" type="button" data-gallery-index="${index}" aria-label="Atvērt ${index + 1}. attēlu">
-      <img src="${imagePath(product, image)}" alt="" loading="lazy">
+      <img src="${escapeHtml(imagePath(product, image))}" alt="" loading="lazy">
     </button>`).join('');
 
   const showImage = index => {
@@ -133,8 +188,28 @@ function setupProductPage() {
   showImage(0);
 
   const form = document.querySelector('#purchaseForm');
+  const quotePanel = document.querySelector('#quotePanel');
+  const detailPrice = document.querySelector('#detailPrice');
+  if (isQuotedProduct(product)) {
+    detailPrice.hidden = true;
+    form.hidden = true;
+    quotePanel.hidden = false;
+    const subject = `Cenas pieprasījums: ${product.name}`;
+    const body = `Labdien!\n\nVēlos saņemt cenas piedāvājumu produktam “${product.name}” (${product.id}).\n\nNepieciešamais izmērs / daudzums:\n`;
+    document.querySelector('#quoteLink').href = `mailto:helena@5metri.lv?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    return;
+  }
+
+  detailPrice.hidden = false;
+  form.hidden = false;
+  quotePanel.hidden = true;
+  document.querySelector('#productPrice').textContent = money.format(product.price);
+  document.querySelector('#productGrossPrice').textContent = `${money.format(product.price * (1 + STORE_CONFIG.vatRate))} / m ar PVN`;
+  document.querySelector('#price2m').textContent = `${money.format(product.price * 2 * (1 + STORE_CONFIG.vatRate))} ar PVN`;
+  document.querySelector('#price3m').textContent = `${money.format(product.price * 3 * (1 + STORE_CONFIG.vatRate))} ar PVN`;
+
   const quantity = document.querySelector('#quantity');
-  const selectedLength = () => Number(form.elements.length.value);
+  const selectedLength = () => Number(form.elements.namedItem('length').value);
   const safeQuantity = () => Math.min(100, Math.max(1, Number.parseInt(quantity.value, 10) || 1));
   const updateLineTotal = () => {
     quantity.value = safeQuantity();
@@ -157,6 +232,8 @@ function setupProductPage() {
 }
 
 function addToCart(productId, length, quantity) {
+  const product = productById(productId);
+  if (!product || isQuotedProduct(product)) return;
   const existing = cart.find(item => item.productId === productId && Number(item.length) === Number(length));
   if (existing) existing.quantity = Math.min(100, Number(existing.quantity) + Number(quantity));
   else cart.push({ productId, length: Number(length), quantity: Math.min(100, Number(quantity)) });
@@ -187,7 +264,7 @@ function renderCart() {
       </article>`;
   }).join('');
 
-  const subtotal = cart.reduce((sum, item) => sum + productById(item.productId).price * Number(item.length) * Number(item.quantity), 0);
+  const subtotal = cartSubtotal();
   const vat = subtotal * STORE_CONFIG.vatRate;
   document.querySelector('#cartEmpty').hidden = cart.length > 0;
   document.querySelector('#cartSummary').hidden = cart.length === 0;
@@ -213,13 +290,41 @@ function closeCart() {
 async function checkout() {
   const button = document.querySelector('#checkoutButton');
   const status = document.querySelector('#checkoutStatus');
-  if (!cart.length) return;
+  cart = cart.filter(item => {
+    const product = productById(item.productId);
+    return product && !isQuotedProduct(product);
+  });
+  if (!cart.length) {
+    saveCart();
+    return;
+  }
+  const fulfillment = document.querySelector('input[name="fulfillment"]:checked')?.value || 'pickup';
   if (!STORE_CONFIG.checkoutEndpoint) {
-    status.textContent = 'Stripe apmaksa tiek aktivizēta. Grozs ir saglabāts šajā ierīcē.';
+    const subtotal = cartSubtotal();
+    const itemLines = cart.map(item => {
+      const product = productById(item.productId);
+      return `• ${product.name} (${product.id}) — ${item.length} m × ${item.quantity} gab.`;
+    });
+    const subject = '5 METRI pasūtījums no interneta veikala';
+    const body = [
+      'Labdien!',
+      '',
+      'Vēlos pasūtīt:',
+      ...itemLines,
+      '',
+      `Saņemšana: ${fulfillment === 'pickup' ? 'veikalā Rīgā' : 'piegāde pēc vienošanās'}`,
+      `Summa bez PVN: ${money.format(subtotal)}`,
+      `PVN 21%: ${money.format(subtotal * STORE_CONFIG.vatRate)}`,
+      `Kopā: ${money.format(subtotal * (1 + STORE_CONFIG.vatRate))}`,
+      '',
+      'Vārds / uzņēmums:',
+      'Tālrunis:'
+    ].join('\n');
+    status.textContent = 'Atveram e-pasta programmu ar sagatavotu pasūtījumu.';
+    location.assign(`mailto:helena@5metri.lv?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
     return;
   }
 
-  const fulfillment = document.querySelector('input[name="fulfillment"]:checked')?.value || 'pickup';
   button.disabled = true;
   button.textContent = 'Atver Stripe…';
   status.textContent = '';
@@ -267,6 +372,13 @@ document.addEventListener('click', event => {
 
 document.addEventListener('keydown', event => { if (event.key === 'Escape') closeCart(); });
 document.querySelector('#checkoutButton')?.addEventListener('click', checkout);
+
+if (!STORE_CONFIG.checkoutEndpoint) {
+  const checkoutButton = document.querySelector('#checkoutButton');
+  const secureNote = document.querySelector('.secure-note');
+  if (checkoutButton) checkoutButton.textContent = 'Sagatavot pasūtījumu e-pastā';
+  if (secureNote) secureNote.textContent = 'Tiks izveidots e-pasts ar groza saturu. Stripe apmaksa tiek aktivizēta.';
+}
 
 setupCatalog();
 setupProductPage();
