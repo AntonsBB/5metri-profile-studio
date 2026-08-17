@@ -88,7 +88,7 @@ async function readJsonBody(request) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-function buildStripeParams(cart) {
+function buildStripeParams(cart, env) {
   const params = new URLSearchParams({
     mode: 'payment',
     success_url: `${env.SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
@@ -133,7 +133,7 @@ async function createCheckoutSession(cart, env) {
       'Stripe-Version': STRIPE_API_VERSION,
       'Idempotency-Key': `5metri-checkout-${cart.checkoutAttemptId}`
     },
-    body: buildStripeParams(cart)
+    body: buildStripeParams(cart, env)
   });
   const result = await response.json();
   if (!response.ok || typeof result.url !== 'string') {
