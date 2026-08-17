@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
-  <meta name="description" content="5 METRI LED un ēnu šuves alumīnija profila informācija, attēli un pasūtīšana.">
+  <meta name="description" content="5 METRI profila informācija, attēli, tehniskie dati un pasūtīšanas vai cenas pieprasījuma iespējas.">
   <title>Profils | 5 METRI</title>
   <link rel="icon" href="assets/5metri-logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260817b">
+  <link rel="stylesheet" href="styles.css?v=20260817c">
 </head>
 <body data-page="product">
   <div class="topbar">
@@ -53,10 +53,18 @@
         <div class="product-meta"><span id="productCode"></span><span id="productFinish"></span></div>
         <h1 id="productName">Profils</h1>
         <p class="product-lead" id="productDescription"></p>
-        <div class="detail-price">
+        <div class="detail-price" id="detailPrice">
           <b id="productPrice">0,00 €</b><span>/ m bez PVN</span>
           <small id="productGrossPrice">0,00 € / m ar PVN</small>
         </div>
+
+        <section class="quote-panel" id="quotePanel" hidden aria-labelledby="quoteTitle">
+          <p class="kicker">Individuāls piedāvājums</p>
+          <h2 id="quoteTitle">Cena pēc pieprasījuma</h2>
+          <p>Norādi nepieciešamo izmēru, apdari un daudzumu — sagatavosim precīzu piedāvājumu.</p>
+          <a class="button button-dark" id="quoteLink" href="mailto:helena@5metri.lv">Pieprasīt cenu e-pastā</a>
+          <small>Vai zvani <a href="tel:+37129140878">+371 29 140 878</a></small>
+        </section>
 
         <form class="purchase-form" id="purchaseForm">
           <fieldset class="length-selector">
@@ -80,7 +88,7 @@
         <div class="purchase-notes">
           <span><b>Saņemšana</b><small>Vienības gatve 31–1, Rīga</small></span>
           <span><b>Piegāde</b><small>Pēc atsevišķas vienošanās</small></span>
-          <span><b>Apmaksa</b><small>Droši Stripe vidē</small></span>
+          <span><b>Apmaksa</b><small>Stripe vai pēc vienošanās</small></span>
         </div>
       </article>
     </section>
@@ -101,7 +109,7 @@
 
   <footer class="site-footer">
     <a class="footer-logo" href="https://5metri.lv/"><img src="assets/5metri-logo.png" alt="5 METRI"></a>
-    <div><b>Veikals</b><a href="./">LED profili</a><a href="../">3D profilu studija</a></div>
+    <div><b>Veikals</b><a href="./">Visi profili</a><a href="../">3D profilu studija</a></div>
     <div><b>Informācija</b><a href="https://5metri.lv/products/pages/shipping-payment">Piegāde un apmaksa</a><a href="https://5metri.lv/products/pages/terms">Noteikumi</a></div>
     <div><b>Kontakti</b><a href="tel:+37129140878">+371 29 140 878</a><a href="mailto:helena@5metri.lv">helena@5metri.lv</a><span>Vienības gatve 31–1, Rīga</span></div>
     <p class="copyright">© 5 METRI · SIA “5 METRI” · Reģ. Nr. 40103297271</p>
@@ -131,7 +139,8 @@
     </section>
   </aside>
 
-  <script src="products.js?v=20260817b"></script>
-  <script src="app.js?v=20260817b"></script>
+  <script src="products.js?v=20260817c"></script>
+  <script src="imported-products.js?v=20260817c"></script>
+  <script src="app.js?v=20260817c"></script>
 </body>
 </html>
