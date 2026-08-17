@@ -1,0 +1,152 @@
+window.STORE_CONFIG = {
+  currency: 'EUR',
+  vatRate: 0.21,
+  checkoutEndpoint: '',
+  paymentLinks: {}
+};
+
+window.PRODUCTS = [
+  {
+    id: 'A10-N',
+    slug: 'a10-n',
+    category: 'shadow',
+    name: 'Ēnu šuves profils 10 × 25 mm',
+    finish: 'Neapstrādāts alumīnijs',
+    finishKey: 'raw',
+    dimensions: '10 × 25 mm',
+    price: 7.39,
+    images: ['01.jpg', '02.jpg', '03.jpg', '04.jpg', '05.jpg', '06.jpg', '07.jpg'],
+    description: 'Precīzai 10 mm ēnu šuvei starp ģipškartona griestiem un sienu.',
+    details: ['Alumīnijs bez pārklājuma', '12,5 mm ģipškartona plāksnei', '10 mm redzama ēnu šuve', '2 m un 3 m garumi']
+  },
+  {
+    id: 'A10-B',
+    slug: 'a10-b',
+    category: 'shadow',
+    name: 'Ēnu šuves profils 10 × 25 mm',
+    finish: 'Melns, RAL 9005',
+    finishKey: 'black',
+    dimensions: '10 × 25 mm',
+    price: 8.15,
+    images: ['01.jpg', '02.jpg', '03.jpg', '04.jpg'],
+    description: 'Melna, vienmērīga ēnu līnija minimālistiskam griestu perimetram.',
+    details: ['Alumīnijs ar melnu pārklājumu', '12,5 mm ģipškartona plāksnei', '10 mm redzama ēnu šuve', '2 m un 3 m garumi']
+  },
+  {
+    id: 'L16-N',
+    slug: 'l16-n',
+    category: 'led',
+    name: 'LED ēnu šuves profils 16 × 22 mm',
+    finish: 'Neapstrādāts alumīnijs',
+    finishKey: 'raw',
+    dimensions: '16 × 22 mm',
+    price: 9.17,
+    images: ['01.jpg', '02.png', '03.jpg', '04.jpg'],
+    description: 'Kompakts perimetra profils ar integrētu kanālu LED lentei.',
+    details: ['Alumīnijs bez pārklājuma', 'LED kanāls ar difuzoru', '12,5 mm ģipškartona plāksnei', '2 m un 3 m garumi']
+  },
+  {
+    id: 'L16-W',
+    slug: 'l16-w',
+    category: 'led',
+    name: 'LED ēnu šuves profils 16 × 22 mm',
+    finish: 'Balts, RAL 9016',
+    finishKey: 'white',
+    dimensions: '16 × 22 mm',
+    price: 10.19,
+    images: ['01.jpg', '02.png', '03.jpg', '04.jpg'],
+    description: 'Balts perimetra profils vienmērīgai griestu malas gaismai.',
+    details: ['Alumīnijs ar baltu pārklājumu', 'LED kanāls ar difuzoru', '12,5 mm ģipškartona plāksnei', '2 m un 3 m garumi']
+  },
+  {
+    id: 'L16-B',
+    slug: 'l16-b',
+    category: 'led',
+    name: 'LED ēnu šuves profils 16 × 22 mm',
+    finish: 'Melns, RAL 9005',
+    finishKey: 'black',
+    dimensions: '16 × 22 mm',
+    price: 10.19,
+    images: ['01.jpg', '02.png', '03.jpg', '04.jpg'],
+    description: 'Melns profils izteiksmīgai gaismas līnijai gar griestu malu.',
+    details: ['Alumīnijs ar melnu pārklājumu', 'LED kanāls ar difuzoru', '12,5 mm ģipškartona plāksnei', '2 m un 3 m garumi']
+  },
+  {
+    id: 'D23-W',
+    slug: 'd23-w',
+    category: 'led',
+    name: 'LED distances profils 23 × 37 mm',
+    finish: 'Balts, RAL 9016',
+    finishKey: 'white',
+    dimensions: '23 × 37 mm',
+    price: 11.97,
+    images: ['01.jpg', '02.png', '03.jpg', '04.jpg', '05.jpg'],
+    description: 'Netiešai gaismai un izteiktam peldošo griestu efektam.',
+    details: ['Alumīnijs ar baltu pārklājumu', 'Netiešās gaismas kanāls', '12,5 mm ģipškartona plāksnei', '2 m un 3 m garumi']
+  },
+  {
+    id: 'D23-B',
+    slug: 'd23-b',
+    category: 'led',
+    name: 'LED distances profils 23 × 37 mm',
+    finish: 'Melns, RAL 9005',
+    finishKey: 'black',
+    dimensions: '23 × 37 mm',
+    price: 11.97,
+    images: ['01.jpg', '02.png', '04.jpg', '05.jpg'],
+    description: 'Melns distances profils kontrastējošam peldošo griestu perimetram.',
+    details: ['Alumīnijs ar melnu pārklājumu', 'Netiešās gaismas kanāls', '12,5 mm ģipškartona plāksnei', '2 m un 3 m garumi']
+  },
+  {
+    id: 'D40-W',
+    slug: 'd40-w',
+    category: 'led',
+    name: 'LED distances profils 40 × 50 mm',
+    finish: 'Balts, RAL 9016',
+    finishKey: 'white',
+    dimensions: '40 × 50 mm',
+    price: 15.02,
+    images: ['01.jpg', '03.jpg'],
+    description: 'Plats profils spēcīgai netiešajai gaismai un dziļākam griestu atstatumam.',
+    details: ['Alumīnijs ar baltu pārklājumu', 'Plats netiešās gaismas kanāls', '12,5 mm ģipškartona plāksnei', '2 m un 3 m garumi']
+  },
+  {
+    id: 'G20-W',
+    slug: 'g20-w',
+    category: 'shadow',
+    name: 'Gala ēnu profils ar LED kanālu',
+    finish: 'Balts, RAL 9016',
+    finishKey: 'white',
+    dimensions: '20 mm šuve',
+    price: 8.66,
+    images: ['01.jpg', '02.jpg', '03.jpg', '04.jpg', '05.jpg'],
+    description: 'Griestu gala profils tīrai 20 mm šuvei ar integrētu LED kanālu.',
+    details: ['Alumīnijs ar baltu pārklājumu', '20 mm ēnu šuve', 'LED kanāls ar difuzoru', '2 m un 3 m garumi']
+  },
+  {
+    id: 'G20-B',
+    slug: 'g20-b',
+    category: 'shadow',
+    name: 'Gala ēnu profils ar LED kanālu',
+    finish: 'Melns, RAL 9005',
+    finishKey: 'black',
+    dimensions: '20 mm šuve',
+    price: 8.66,
+    images: ['01.jpg', '02.jpg', '03.jpg', '04.jpg', '05.jpg'],
+    description: 'Melns gala profils kontrastējošai 20 mm šuvei un gaismas līnijai.',
+    details: ['Alumīnijs ar melnu pārklājumu', '20 mm ēnu šuve', 'LED kanāls ar difuzoru', '2 m un 3 m garumi']
+  },
+  {
+    id: 'S15-W',
+    slug: 's15-w',
+    category: 'separator',
+    name: 'LED dalījuma profils 15 mm',
+    finish: 'Balts',
+    finishKey: 'white',
+    dimensions: '15 × 13,5 mm',
+    price: 7.13,
+    images: ['01.jpg', '03.jpg', '04.jpg'],
+    description: 'Lineārs profils precīzai gaismas līnijai ģipškartona griestu plaknē.',
+    details: ['Alumīnijs ar baltu pārklājumu', '15 mm redzama gaismas līnija', 'Difuzors komplektā', '2 m un 3 m garumi']
+  }
+];
