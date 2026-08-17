@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "5metri-stripe-checkout",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "5metri-checkout.abbrains.xyz", "custom_domain": true }
+  ],
+  "vars": {
+    "ALLOWED_ORIGINS": "https://antonsbb.github.io,http://localhost:4173,http://127.0.0.1:4173",
+    "STORE_URL": "https://antonsbb.github.io/5metri-profile-studio/led-katalogs/",
+    "SUCCESS_URL": "https://antonsbb.github.io/5metri-profile-studio/led-katalogs/success.html"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.05 }
+  }
+}
