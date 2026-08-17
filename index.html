@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260813-engine-rebuild">
+  <link rel="stylesheet" href="styles.css?v=20260817-store-performance">
   <script type="importmap">
     {
       "imports": {
@@ -36,6 +36,9 @@
       <span><b id="headerProfileName">L veida profils</b><small id="headerSaveState">Izmaiņas saglabājas ierīcē</small></span>
     </div>
     <div class="header-actions">
+      <nav class="header-navigation" aria-label="Studijas navigācija">
+        <a class="button button-store" href="../" data-store-link data-legacy-href="./led-katalogs/">Veikals</a>
+      </nav>
       <button class="button button-ghost" id="shareButton" type="button">Kopīgot</button>
       <button class="button button-primary" id="openRfqButton" type="button">Nosūtīt 5 METRI</button>
     </div>
@@ -132,6 +135,13 @@
           </select>
         </label>
       </section>
+
+      <section class="store-connection" aria-labelledby="storeConnectionTitle">
+        <span class="eyebrow">Gatavi profili</span>
+        <h2 id="storeConnectionTitle">Vajag standarta izmēru?</h2>
+        <p>Salīdzini noliktavas profilus, apskati pielietojumu un pasūti pieejamos garumus tiešsaistē.</p>
+        <a href="../" data-store-link data-legacy-href="./led-katalogs/">Atvērt profilu veikalu →</a>
+      </section>
     </aside>
 
     <section class="viewer-panel" aria-label="3D profila priekšskatījums">
@@ -227,7 +237,7 @@
           <div class="hole-preview" id="holePreview"></div>
           <div class="custom-hole-preview" id="customHolePreview"></div>
           <span class="z-label">Z</span>
-          <span class="z-hint">Klikšķini uz profila — dzeltenais punkts = atsevišķs urbums</span>
+          <span class="z-hint">Klikšķini uz profila — zaļais punkts = atsevišķs urbums</span>
         </div>
         <label class="toggle-row" for="holesToggle">
           <span><b>Periodiski urbumi</b><small>Atzīmēt urbumu soli gar Z asi</small></span>
@@ -314,6 +324,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <noscript>Šim konfiguratoram nepieciešams JavaScript, lai izveidotu 3D modeli.</noscript>
-  <script type="module" src="app.js?v=20260813-engine-rebuild"></script>
+  <script type="module" src="app.js?v=20260817-store-performance"></script>
 </body>
 </html>

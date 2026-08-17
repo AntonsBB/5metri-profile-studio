@@ -3,49 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#f7f6f2">
   <meta name="description" content="5 METRI profila informācija, attēli, tehniskie dati un pasūtīšanas vai cenas pieprasījuma iespējas.">
+  <meta name="robots" content="noindex,follow">
   <title>Profils | 5 METRI</title>
   <link rel="icon" href="assets/5metri-logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260817d">
+  <link rel="stylesheet" href="styles.css?v=20260817e">
 </head>
 <body data-page="product">
-  <div class="topbar">
-    <span>5 METRI interneta veikals</span>
-    <a href="https://5metri.lv/products/pages/shipping-payment">Saņemšana Rīgā · piegāde pēc vienošanās</a>
-  </div>
+  <a class="skip-link" href="#productPage">Pāriet uz produktu</a>
+  <div class="topbar"><span>5 METRI · profili, kas pabeidz telpu</span><a href="https://5metri.lv/products/pages/shipping-payment">Saņemšana Rīgā · piegāde pēc vienošanās</a></div>
 
   <header class="site-header">
-    <a class="brand" href="https://5metri.lv/" aria-label="5 METRI sākumlapa">
-      <img src="assets/5metri-logo.png" alt="5 METRI">
-    </a>
-    <nav aria-label="Galvenā navigācija">
-      <a class="active" href="./">Veikals</a>
-      <a href="../">3D profilu studija</a>
-      <a href="https://5metri.lv/products/pages/shipping-payment">Piegāde</a>
-      <a href="https://5metri.lv/contacts">Kontakti</a>
-    </nav>
-    <button class="cart-trigger" type="button" data-cart-open aria-label="Atvērt grozu">
-      <span>Grozs</span><b data-cart-count>0</b>
-    </button>
+    <a class="brand" href="./" data-site-path="" aria-label="5 METRI veikala sākumlapa"><img src="assets/5metri-logo.png" alt="5 METRI" width="180" height="86"></a>
+    <nav aria-label="Galvenā navigācija"><a class="active" href="./" data-site-path="">Veikals</a><a href="./#gatavi" data-site-path="#gatavi">Pasūtīt uzreiz</a><a href="./#katalogs" data-site-path="#katalogs">Pilns katalogs</a><a href="../" data-site-path="studio/">3D studija</a><a href="./#kontakti" data-site-path="#kontakti">Kontakti</a></nav>
+    <button class="cart-trigger" type="button" data-cart-open aria-label="Atvērt grozu"><span>Grozs</span><b data-cart-count>0</b></button>
   </header>
 
   <main id="productPage">
-    <nav class="breadcrumbs" aria-label="Atpakaļceļš">
-      <a href="./">Veikals</a><span>/</span><span id="breadcrumbName">Profils</span>
-    </nav>
+    <nav class="breadcrumbs" aria-label="Atpakaļceļš"><a href="./" data-site-path="">Veikals</a><span>/</span><span id="breadcrumbCategory">Profili</span><span>/</span><span id="breadcrumbName">Profils</span></nav>
 
     <section class="product-detail">
       <div class="product-gallery">
-        <div class="gallery-main">
-          <img id="productMainImage" src="" alt="">
-          <button class="gallery-arrow gallery-prev" type="button" data-gallery-prev aria-label="Iepriekšējais attēls">←</button>
-          <button class="gallery-arrow gallery-next" type="button" data-gallery-next aria-label="Nākamais attēls">→</button>
-          <span id="galleryCounter">1 / 1</span>
-        </div>
+        <div class="gallery-main"><img id="productMainImage" src="" alt=""><button class="gallery-arrow gallery-prev" type="button" data-gallery-prev aria-label="Iepriekšējais attēls">←</button><button class="gallery-arrow gallery-next" type="button" data-gallery-next aria-label="Nākamais attēls">→</button><span id="galleryCounter">1 / 1</span></div>
         <div class="gallery-thumbs" id="galleryThumbs" aria-label="Produkta attēli"></div>
       </div>
 
@@ -53,94 +36,43 @@
         <div class="product-meta"><span id="productCode"></span><span id="productFinish"></span></div>
         <h1 id="productName">Profils</h1>
         <p class="product-lead" id="productDescription"></p>
-        <div class="detail-price" id="detailPrice">
-          <b id="productPrice">0,00 €</b><span>/ m bez PVN</span>
-          <small id="productGrossPrice">0,00 € / m ar PVN</small>
-        </div>
+        <div class="detail-price" id="detailPrice"><b id="productPrice">0,00 €</b><span>/ m bez PVN</span><small id="productGrossPrice">0,00 € / m ar PVN</small></div>
 
         <section class="quote-panel" id="quotePanel" hidden aria-labelledby="quoteTitle">
-          <p class="kicker">Individuāls piedāvājums</p>
-          <h2 id="quoteTitle">Cena pēc pieprasījuma</h2>
-          <p>Norādi nepieciešamo izmēru, apdari un daudzumu — sagatavosim precīzu piedāvājumu.</p>
-          <a class="button button-dark" id="quoteLink" href="mailto:helena@5metri.lv">Pieprasīt cenu e-pastā</a>
-          <small>Vai zvani <a href="tel:+37129140878">+371 29 140 878</a></small>
+          <p class="kicker">Individuāls piedāvājums</p><h2 id="quoteTitle">Saņem precīzu cenu.</h2><p>Cena ir atkarīga no izmēra, apdares, garuma un daudzuma. Atbildēsim ar konkrētu piedāvājumu.</p>
+          <form class="quote-form" id="quoteForm">
+            <div class="quote-form__row"><label>Vārds vai uzņēmums<input name="name" autocomplete="name" required></label><label>E-pasts<input name="email" type="email" autocomplete="email" required></label></div>
+            <div class="quote-form__row"><label>Tālrunis<input name="phone" type="tel" autocomplete="tel" required></label><label>Daudzums / garums<input name="quantity" placeholder="Piem., 40 gab. × 3 m" required></label></div>
+            <label>Papildu informācija<textarea name="details" rows="3" placeholder="Izmērs, tonis, objekts vai vēlamais termiņš"></textarea></label>
+            <button class="button button-dark" type="submit">Nosūtīt cenas pieprasījumu</button>
+            <p class="quote-status" id="quoteStatus" aria-live="polite"></p>
+          </form>
+          <small>Vai zvani <a href="tel:+37129140878">+371 29 140 878</a> · <a id="quoteLink" href="mailto:helena@5metri.lv">atvērt e-pastu</a></small>
         </section>
 
         <form class="purchase-form" id="purchaseForm">
-          <fieldset class="length-selector">
-            <legend>Profila garums</legend>
-            <label><input type="radio" name="length" value="2" checked><span><b>2 metri</b><small id="price2m"></small></span></label>
-            <label><input type="radio" name="length" value="3"><span><b>3 metri</b><small id="price3m"></small></span></label>
-          </fieldset>
-          <div class="quantity-row">
-            <label for="quantity">Daudzums</label>
-            <div class="quantity-control">
-              <button type="button" data-qty-minus aria-label="Samazināt daudzumu">−</button>
-              <input id="quantity" name="quantity" type="number" min="1" max="100" step="1" value="1" inputmode="numeric">
-              <button type="button" data-qty-plus aria-label="Palielināt daudzumu">+</button>
-            </div>
-            <span id="lineTotal">0,00 € ar PVN</span>
-          </div>
-          <button class="button button-dark add-to-cart" type="submit">Pievienot grozam</button>
-          <button class="button button-outline buy-now" id="buyNowButton" type="button">Pirkt un apmaksāt</button>
+          <fieldset class="length-selector"><legend>Profila garums</legend><label><input type="radio" name="length" value="2" checked><span><b>2 metri</b><small id="price2m"></small></span></label><label><input type="radio" name="length" value="3"><span><b>3 metri</b><small id="price3m"></small></span></label></fieldset>
+          <div class="quantity-row"><label for="quantity">Daudzums</label><div class="quantity-control"><button type="button" data-qty-minus aria-label="Samazināt daudzumu">−</button><input id="quantity" name="quantity" type="number" min="1" max="100" step="1" value="1" inputmode="numeric"><button type="button" data-qty-plus aria-label="Palielināt daudzumu">+</button></div><span id="lineTotal">0,00 € ar PVN</span></div>
+          <button class="button button-dark add-to-cart" type="submit">Pievienot grozam</button><button class="button button-outline buy-now" id="buyNowButton" type="button">Pirkt un apmaksāt</button>
         </form>
 
-        <div class="purchase-notes">
-          <span><b>Saņemšana</b><small>Vienības gatve 31–1, Rīga</small></span>
-          <span><b>Piegāde</b><small>Pēc atsevišķas vienošanās</small></span>
-          <span><b>Apmaksa</b><small>Stripe vai pēc vienošanās</small></span>
-        </div>
+        <div class="purchase-notes"><span><b>Saņemšana</b><small>Vienības gatve 31–1, Rīga</small></span><span><b>Piegāde</b><small>Pēc atsevišķas vienošanās</small></span><span><b>Apmaksa</b><small>Droši Stripe vidē</small></span></div>
       </article>
     </section>
 
-    <section class="product-specs">
-      <div>
-        <p class="kicker">Produkta informācija</p>
-        <h2>Tehniskie dati</h2>
-      </div>
-      <dl id="productSpecs"></dl>
-    </section>
+    <section class="product-specs"><div><p class="kicker">Produkta informācija</p><h2>Tehniskie dati.</h2><p class="specs-intro">Pārbaudi šķērsgriezumu, izmērus un apdari pirms pasūtījuma. Ja vajadzīgs cits risinājums, pielāgo to 3D studijā.</p></div><dl id="productSpecs"></dl></section>
 
-    <section class="related-products">
-      <div class="catalog-heading"><div><p class="kicker">Citi varianti</p><h2>Līdzīgi profili</h2></div><a href="./">Skatīt visus</a></div>
-      <div class="product-grid compact" id="relatedGrid"></div>
-    </section>
+    <section class="custom-profile-cta"><div><p class="kicker light">Vajag citu izmēru?</p><h2>Izveido līdzīgu profilu 3D.</h2><p>Uzzīmē savu šķērsgriezumu mērogā, maini garumu un sagatavo ražošanas pieprasījumu.</p></div><a class="button button-light" href="../" data-site-path="studio/">Atvērt 3D studiju</a></section>
+
+    <section class="related-products"><div class="catalog-heading"><div><p class="kicker">Citi varianti</p><h2>Līdzīgi profili.</h2></div><a href="./#katalogs" data-site-path="#katalogs">Skatīt visus</a></div><div class="product-grid compact" id="relatedGrid"></div></section>
   </main>
 
-  <footer class="site-footer">
-    <a class="footer-logo" href="https://5metri.lv/"><img src="assets/5metri-logo.png" alt="5 METRI"></a>
-    <div><b>Veikals</b><a href="./">Visi profili</a><a href="../">3D profilu studija</a></div>
-    <div><b>Informācija</b><a href="https://5metri.lv/products/pages/shipping-payment">Piegāde un apmaksa</a><a href="https://5metri.lv/products/pages/terms">Noteikumi</a></div>
-    <div><b>Kontakti</b><a href="tel:+37129140878">+371 29 140 878</a><a href="mailto:helena@5metri.lv">helena@5metri.lv</a><span>Vienības gatve 31–1, Rīga</span></div>
-    <p class="copyright">© 5 METRI · SIA “5 METRI” · Reģ. Nr. 40103297271</p>
-  </footer>
+  <footer class="site-footer" id="kontakti"><a class="footer-logo" href="./" data-site-path=""><img src="assets/5metri-logo.png" alt="5 METRI" width="180" height="86"></a><div><b>Veikals</b><a href="./#gatavi" data-site-path="#gatavi">Pasūtīt uzreiz</a><a href="./#katalogs" data-site-path="#katalogs">Visi profili</a><a href="../" data-site-path="studio/">3D profilu studija</a></div><div><b>Informācija</b><a href="https://5metri.lv/products/pages/shipping-payment">Piegāde un apmaksa</a><a href="https://5metri.lv/products/pages/terms">Noteikumi</a><a href="https://5metri.lv/products/pages/privacy-policy">Datu apstrāde</a></div><div><b>Kontakti</b><a href="tel:+37129140878">+371 29 140 878</a><a href="mailto:helena@5metri.lv">helena@5metri.lv</a><span>Vienības gatve 31–1, Rīga</span></div><p class="copyright">© 5 METRI · SIA “5 METRI” · Reģ. Nr. 40103297271</p></footer>
 
-  <aside class="cart-drawer" id="cartDrawer" aria-hidden="true" aria-labelledby="cartTitle">
-    <div class="cart-backdrop" data-cart-close></div>
-    <section class="cart-panel">
-      <header><div><p class="kicker">Pasūtījums</p><h2 id="cartTitle">Tavs grozs</h2></div><button type="button" data-cart-close aria-label="Aizvērt grozu">×</button></header>
-      <div class="cart-items" id="cartItems"></div>
-      <div class="cart-empty" id="cartEmpty"><p>Grozs ir tukšs.</p><button class="text-button" type="button" data-cart-close>Turpināt iepirkties</button></div>
-      <div class="cart-summary" id="cartSummary" hidden>
-        <fieldset>
-          <legend>Saņemšanas veids</legend>
-          <label><input type="radio" name="fulfillment" value="pickup" checked><span><b>Saņemt veikalā</b><small>Vienības gatve 31–1, Rīga · bez maksas</small></span></label>
-          <label><input type="radio" name="fulfillment" value="delivery"><span><b>Piegāde pēc vienošanās</b><small>Piegādes izmaksas izrakstīsim atsevišķi</small></span></label>
-        </fieldset>
-        <dl>
-          <div><dt>Summa bez PVN</dt><dd id="cartSubtotal">0,00 €</dd></div>
-          <div><dt>PVN 21%</dt><dd id="cartVat">0,00 €</dd></div>
-          <div class="cart-total"><dt>Kopā</dt><dd id="cartTotal">0,00 €</dd></div>
-        </dl>
-        <button class="button button-dark checkout-button" id="checkoutButton" type="button">Apmaksāt ar Stripe</button>
-        <p class="secure-note"><span aria-hidden="true">▣</span> Droša apmaksa Stripe vidē. Piegāde nav iekļauta.</p>
-        <p class="checkout-status" id="checkoutStatus" aria-live="polite"></p>
-      </div>
-    </section>
-  </aside>
+  <div class="product-mobile-actions" id="productMobileActions"><span><small id="mobileActionLabel">Cena ar PVN</small><b id="mobileActionPrice">—</b></span><button class="button button-dark" id="mobileActionButton" type="button">Izvēlēties</button></div>
 
-  <script src="products.js?v=20260817d"></script>
-  <script src="imported-products.js?v=20260817d"></script>
-  <script src="app.js?v=20260817d"></script>
+  <aside class="cart-drawer" id="cartDrawer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="cartTitle"><div class="cart-backdrop" data-cart-close></div><section class="cart-panel" tabindex="-1"><header><div><p class="kicker">Pasūtījums</p><h2 id="cartTitle">Tavs grozs</h2></div><button type="button" data-cart-close aria-label="Aizvērt grozu">×</button></header><div class="cart-items" id="cartItems"></div><div class="cart-empty" id="cartEmpty"><p>Grozs ir tukšs.</p><button class="text-button" type="button" data-cart-close>Turpināt iepirkties</button></div><div class="cart-summary" id="cartSummary" hidden><fieldset><legend>Saņemšanas veids</legend><label><input type="radio" name="fulfillment" value="pickup" checked><span><b>Saņemt veikalā</b><small>Vienības gatve 31–1, Rīga · bez maksas</small></span></label><label><input type="radio" name="fulfillment" value="delivery"><span><b>Piegāde pēc vienošanās</b><small>Piegādes izmaksas izrakstīsim atsevišķi</small></span></label></fieldset><dl><div><dt>Summa bez PVN</dt><dd id="cartSubtotal">0,00 €</dd></div><div><dt>PVN 21%</dt><dd id="cartVat">0,00 €</dd></div><div class="cart-total"><dt>Kopā</dt><dd id="cartTotal">0,00 €</dd></div></dl><button class="button button-dark checkout-button" id="checkoutButton" type="button">Apmaksāt ar Stripe</button><p class="secure-note">Droša apmaksa Stripe vidē. Piegāde nav iekļauta.</p><p class="checkout-status" id="checkoutStatus" aria-live="polite"></p></div></section></aside>
+
+  <script src="products.js?v=20260817e"></script><script src="imported-products.js?v=20260817e"></script><script src="app.js?v=20260817e"></script>
 </body>
 </html>

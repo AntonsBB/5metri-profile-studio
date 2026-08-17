@@ -24,12 +24,24 @@ jobs:
     steps:
       - name: Saņemt lapas failus
         uses: actions/checkout@v5
+      - name: Sagatavot Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Izveidot produkcijas veikalu
+        env:
+          SITE_URL: https://5metri.com
+        run: node scripts/build-store.mjs
+      - name: Pārbaudīt produkcijas būvējumu
+        env:
+          SITE_URL: https://5metri.com
+        run: node scripts/validate-store-build.mjs
       - name: Sagatavot GitHub Pages
         uses: actions/configure-pages@v6
       - name: Iepakot statisko lapu
         uses: actions/upload-pages-artifact@v5
         with:
-          path: .
+          path: ./dist
       - name: Publicēt
         id: deployment
         uses: actions/deploy-pages@v5
