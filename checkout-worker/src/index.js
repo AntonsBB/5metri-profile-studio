@@ -88,11 +88,26 @@ async function readJsonBody(request) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-function buildStripeParams(cart, env) {
+function resolveCheckoutReturnUrls(origin, env) {
+  if (origin === env.LEGACY_STORE_ORIGIN) {
+    return {
+      storeUrl: env.LEGACY_STORE_URL,
+      successUrl: env.LEGACY_SUCCESS_URL
+    };
+  }
+
+  return {
+    storeUrl: env.STORE_URL,
+    successUrl: env.SUCCESS_URL
+  };
+}
+
+function buildStripeParams(cart, env, origin) {
+  const returnUrls = resolveCheckoutReturnUrls(origin, env);
   const params = new URLSearchParams({
     mode: 'payment',
-    success_url: `${env.SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: env.STORE_URL,
+    success_url: `${returnUrls.successUrl}?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: returnUrls.storeUrl,
     customer_creation: 'always',
     billing_address_collection: 'required',
     'automatic_tax[enabled]': 'true',
@@ -124,7 +139,7 @@ function buildStripeParams(cart, env) {
   return params;
 }
 
-async function createCheckoutSession(cart, env) {
+async function createCheckoutSession(cart, env, origin) {
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
     headers: {
@@ -133,7 +148,7 @@ async function createCheckoutSession(cart, env) {
       'Stripe-Version': STRIPE_API_VERSION,
       'Idempotency-Key': `5metri-checkout-${cart.checkoutAttemptId}`
     },
-    body: buildStripeParams(cart, env)
+    body: buildStripeParams(cart, env, origin)
   });
   const result = await response.json();
   if (!response.ok || typeof result.url !== 'string') {
@@ -170,7 +185,7 @@ export default {
       const body = await readJsonBody(request);
       const cart = validateCart(body);
       if (!cart) return json({ error: 'Invalid cart' }, 400, allowedOrigin);
-      const checkoutUrl = await createCheckoutSession(cart, env);
+      const checkoutUrl = await createCheckoutSession(cart, env, origin);
       return json({ url: checkoutUrl }, 200, allowedOrigin);
     } catch (error) {
       if (error instanceof RangeError) return json({ error: 'Request too large' }, 413, allowedOrigin);

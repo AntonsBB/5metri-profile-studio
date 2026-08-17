@@ -50,25 +50,44 @@ let saveTimer;
 let toastTimer;
 let rebuildFrame;
 let resizeFitFrame;
+let sceneFrame = null;
+let renderDirty = true;
+let controlsActive = false;
 let rendererWidth = 0;
 let rendererHeight = 0;
+let rendererPixelRatio = 0;
+let rendererShadowsEnabled = null;
 
 const mount = $('#webglMount');
 const sketchCanvas = $('#sketchCanvas');
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
+syncStoreLinks();
 initScene();
 bindInterface();
 syncInterface();
 renderSketch();
 buildModel({ animate: false, refit: true });
-animateScene();
+requestSceneRender();
 
 function createProjectId() {
   const now = new Date();
   const date = [String(now.getFullYear()).slice(-2), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('');
   return `P-${date}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+}
+
+function syncStoreLinks() {
+  const legacyHost = location.protocol === 'file:'
+    || location.hostname === 'antonsbb.github.io'
+    || location.hostname === 'localhost'
+    || location.hostname === '127.0.0.1'
+    || location.hostname === '0.0.0.0'
+    || location.hostname.endsWith('.localhost');
+  if (!legacyHost) return;
+  $$('[data-store-link]').forEach(link => {
+    link.href = link.dataset.legacyHref || './led-katalogs/';
+  });
 }
 
 function loadInitialState() {
@@ -122,12 +141,16 @@ function initScene() {
   camera = new THREE.PerspectiveCamera(33, 1, 0.1, 50000);
   camera.position.set(1250, 720, 1450);
 
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const compactQuality = usesReducedRendererQuality();
+  renderer = new THREE.WebGLRenderer({
+    antialias: !compactQuality,
+    alpha: true,
+    powerPreference: compactQuality ? 'default' : 'high-performance'
+  });
+  applyRendererQuality();
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.12;
-  renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   mount.appendChild(renderer.domElement);
 
@@ -145,43 +168,101 @@ function initScene() {
   controls.autoRotateSpeed = 0.24;
   controls.target.set(0, 0, 0);
   controls.addEventListener('start', () => {
+    controlsActive = true;
     controls.autoRotate = false;
     cancelCameraTween();
+    requestSceneRender();
+  });
+  controls.addEventListener('change', requestSceneRender);
+  controls.addEventListener('end', () => {
+    controlsActive = false;
+    requestSceneRender();
   });
 
-  scene.add(new THREE.HemisphereLight(0xddeeff, 0x25282b, 1.75));
+  scene.add(new THREE.HemisphereLight(0xe2ece8, 0x25282b, 1.75));
   const key = new THREE.DirectionalLight(0xffffff, 4.5);
   key.position.set(-450, 620, 350);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
   scene.add(key);
 
-  const rim = new THREE.DirectionalLight(0x9ec9ff, 3.2);
+  const rim = new THREE.DirectionalLight(0xb8d5ca, 3.2);
   rim.position.set(500, 160, -700);
   scene.add(rim);
 
-  const warm = new THREE.PointLight(0xff6b55, 55, 1600, 2);
+  const warm = new THREE.PointLight(0xd12630, 55, 1600, 2);
   warm.position.set(-300, 120, -500);
   scene.add(warm);
 
-  const lowFill = new THREE.DirectionalLight(0xd9e7f2, 2.15);
+  const lowFill = new THREE.DirectionalLight(0xdce5e1, 2.15);
   lowFill.position.set(-360, -420, 520);
   scene.add(lowFill);
 
   const resizeObserver = new ResizeObserver(resizeRenderer);
   resizeObserver.observe(mount);
+  document.addEventListener('visibilitychange', handleSceneVisibility);
+  window.addEventListener('resize', resizeRenderer);
   resizeRenderer();
+}
+
+function usesReducedRendererQuality() {
+  return coarsePointer || window.innerWidth <= 960;
+}
+
+function applyRendererQuality() {
+  const compactQuality = usesReducedRendererQuality();
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, compactQuality ? 1.25 : 1.75);
+  const shadowsEnabled = !compactQuality;
+  let changed = false;
+  if (rendererPixelRatio !== pixelRatio) {
+    rendererPixelRatio = pixelRatio;
+    renderer.setPixelRatio(pixelRatio);
+    changed = true;
+  }
+  if (rendererShadowsEnabled !== shadowsEnabled) {
+    rendererShadowsEnabled = shadowsEnabled;
+    renderer.shadowMap.enabled = shadowsEnabled;
+    changed = true;
+  }
+  return changed;
+}
+
+function viewerCanRender() {
+  return !document.hidden && (window.innerWidth > 960 || document.body.dataset.mobilePanel === 'viewer');
+}
+
+function requestSceneRender() {
+  renderDirty = true;
+  if (sceneFrame === null && viewerCanRender()) sceneFrame = requestAnimationFrame(animateScene);
+}
+
+function stopSceneRendering() {
+  if (sceneFrame !== null) cancelAnimationFrame(sceneFrame);
+  sceneFrame = null;
+}
+
+function handleSceneVisibility() {
+  if (!viewerCanRender()) {
+    stopSceneRendering();
+    return;
+  }
+  requestAnimationFrame(() => {
+    resizeRenderer();
+    requestSceneRender();
+  });
 }
 
 function resizeRenderer() {
   const width = Math.max(1, mount.clientWidth);
   const height = Math.max(1, mount.clientHeight);
-  if (width === rendererWidth && height === rendererHeight) return;
+  const qualityChanged = applyRendererQuality();
+  if (width === rendererWidth && height === rendererHeight && !qualityChanged) return;
   rendererWidth = width;
   rendererHeight = height;
   renderer.setSize(width, height, false);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
+  requestSceneRender();
   if (profileAssembly) {
     cancelAnimationFrame(resizeFitFrame);
     resizeFitFrame = requestAnimationFrame(() => fitCamera(currentCamera, false));
@@ -393,7 +474,15 @@ function updateRangeProgress() {
 function setMobilePanel(panel) {
   document.body.dataset.mobilePanel = panel;
   $$('.mobile-tabs button').forEach(button => button.classList.toggle('active', button.dataset.panel === panel));
-  if (panel === 'viewer') requestAnimationFrame(() => { resizeRenderer(); fitCamera(currentCamera, false); });
+  if (panel === 'viewer') {
+    requestAnimationFrame(() => {
+      resizeRenderer();
+      fitCamera(currentCamera, false);
+      requestSceneRender();
+    });
+  } else if (window.innerWidth <= 960) {
+    stopSceneRendering();
+  }
 }
 
 function setDrawingTab(tab) {
@@ -558,7 +647,7 @@ function renderSketch() {
     <g id="snapPreview" style="visibility:hidden;pointer-events:none">
       <line id="snapVertical" y1="0" y2="${GRID_SIZE}" stroke="#d12630" stroke-width=".45" stroke-dasharray="2 2" opacity=".65"/>
       <line id="snapHorizontal" x1="0" x2="${GRID_SIZE}" stroke="#d12630" stroke-width=".45" stroke-dasharray="2 2" opacity=".65"/>
-      <circle id="snapPoint" r="3.2" fill="#ffd33d" stroke="#1e2328" stroke-width="1.2"/>
+      <circle id="snapPoint" r="3.2" fill="#27654e" stroke="#f7f7f4" stroke-width="1.2"/>
     </g>
   `;
 
@@ -601,7 +690,10 @@ function buildModel({ animate = false, refit = false } = {}) {
 
   const dimensions = activeDimensions();
   const shape = makeProfileShape();
-  if (!shape) return;
+  if (!shape) {
+    requestSceneRender();
+    return;
+  }
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
     depth: state.length,
@@ -644,6 +736,7 @@ function buildModel({ animate = false, refit = false } = {}) {
   updateMetrics();
   updateCopy();
   if (refit) fitCamera(currentCamera, false);
+  else requestSceneRender();
 }
 
 function startExtrusionAnimation() {
@@ -652,6 +745,7 @@ function startExtrusionAnimation() {
   if (reduceMotion) {
     extrusionAnimation = null;
     setRenderStatus(false);
+    requestSceneRender();
     return;
   }
   extrusionAnimation = {
@@ -660,6 +754,7 @@ function startExtrusionAnimation() {
     group: profileAssembly
   };
   setRenderStatus(true);
+  requestSceneRender();
 }
 
 function makeProfileShape() {
@@ -742,7 +837,7 @@ function createDie(dimensions) {
   const steel = new THREE.MeshStandardMaterial({ color: 0x566169, metalness: .72, roughness: .34 });
   const darkSteel = new THREE.MeshStandardMaterial({ color: 0x2c3439, metalness: .64, roughness: .44 });
   const redSteel = new THREE.MeshStandardMaterial({ color: 0xb82029, metalness: .42, roughness: .42 });
-  const yellow = new THREE.MeshStandardMaterial({ color: 0xe7b52b, metalness: .28, roughness: .48 });
+  const greenSteel = new THREE.MeshStandardMaterial({ color: 0x2f765a, metalness: .34, roughness: .46 });
 
   const addBox = (width, height, depth, x, y, z, material = steel) => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
@@ -777,7 +872,7 @@ function createDie(dimensions) {
   addBox(42, 92, 115, -pressWidth * .34, -pressHeight / 2 - 70, faceZ - 48, steel);
   addBox(42, 92, 115, pressWidth * .34, -pressHeight / 2 - 70, faceZ - 48, steel);
   addBox(pressWidth * .72, 26, 7, 0, pressHeight / 2 + 22, frontZ + 4, redSteel);
-  addBox(72, 28, 7, -pressWidth * .28, pressHeight * .27, frontZ + 4, yellow);
+  addBox(72, 28, 7, -pressWidth * .28, pressHeight * .27, frontZ + 4, greenSteel);
 
   [-1, 1].forEach(direction => {
     const barrel = new THREE.Mesh(new THREE.CylinderGeometry(27, 34, 150, 24), darkSteel);
@@ -794,7 +889,7 @@ function createDie(dimensions) {
     bolt.position.set(x * (openingWidth / 2 + 22), y * (openingHeight / 2 + 22), frontZ + 4);
     group.add(bolt);
   });
-  const workLight = new THREE.PointLight(0xffd3b0, 38, 900, 2);
+  const workLight = new THREE.PointLight(0xd9fff0, 38, 900, 2);
   workLight.position.set(0, pressHeight * .22, frontZ + 170);
   group.add(workLight);
   return group;
@@ -829,7 +924,7 @@ function addMachiningMarkers(group, dimensions) {
   const radius = Math.min(state.holeDiameter / 2, Math.max(1, Math.min(dimensions.width, dimensions.height) * .22));
   const markerMaterial = new THREE.MeshStandardMaterial({ color: 0x15191c, metalness: .42, roughness: .38 });
   const periodicRing = new THREE.MeshBasicMaterial({ color: 0xe05259 });
-  const customRing = new THREE.MeshBasicMaterial({ color: 0xffce3a });
+  const customRing = new THREE.MeshBasicMaterial({ color: 0x39c878 });
 
   const addMarker = (z, ringMaterial, scale = 1) => {
     const marker = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1.5, 20), markerMaterial);
@@ -927,6 +1022,7 @@ function fitCamera(mode = 'model', smooth = false) {
     controls.target.copy(target);
     controls.update();
   }
+  requestSceneRender();
 }
 
 function tweenCamera(destination, target) {
@@ -940,6 +1036,7 @@ function tweenCamera(destination, target) {
     const eased = 1 - Math.pow(1 - t, 3);
     camera.position.lerpVectors(startPosition, destination, eased);
     controls.target.lerpVectors(startTarget, target, eased);
+    requestSceneRender();
     if (t < 1) cameraTweenFrame = requestAnimationFrame(tick);
     else cameraTweenFrame = null;
   };
@@ -952,8 +1049,11 @@ function cancelCameraTween() {
 }
 
 function animateScene(now = performance.now()) {
-  requestAnimationFrame(animateScene);
+  sceneFrame = null;
+  if (!viewerCanRender()) return;
+  let animated = false;
   if (extrusionAnimation && extrusionAnimation.group === profileAssembly) {
+    animated = true;
     const progress = Math.min(1, (now - extrusionAnimation.start) / extrusionAnimation.duration);
     const eased = 1 - Math.pow(1 - progress, 4);
     extrusionAnimation.group.scale.z = Math.max(.004, eased);
@@ -963,8 +1063,15 @@ function animateScene(now = performance.now()) {
       setRenderStatus(false);
     }
   }
-  controls.update();
-  renderer.render(scene, camera);
+  const controlsChanged = Boolean(controls.update());
+  const cameraAnimating = cameraTweenFrame !== null;
+  if (renderDirty || animated || controlsChanged || controlsActive || cameraAnimating) {
+    renderer.render(scene, camera);
+    renderDirty = false;
+  }
+  if (extrusionAnimation || controlsChanged || controlsActive || cameraAnimating) {
+    if (sceneFrame === null) sceneFrame = requestAnimationFrame(animateScene);
+  }
 }
 
 function setRenderStatus(rendering) {
